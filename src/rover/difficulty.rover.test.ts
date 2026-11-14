@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { DIFFICULTIES, DIFFICULTY_IDS, type DifficultyId } from '../game/difficulty';
 import { createCircuit, rotateTile, targetMasks, wrongTiles } from './circuit';
 import { createPressureGame, inBand, stepPressure, type PressureGame } from './pressure';
+import { DOCK, driveRoute, ROUTES, type RouteId } from './routes';
 import { createRover, ROVER, stepRover, type Input, type Rover } from './sim';
 import { MAP } from './world';
 
@@ -70,7 +71,12 @@ describe('rover difficulty settings', () => {
     expect(b.r.x).toBe(a.r.x);
     expect(b.r.y).toBe(a.r.y);
     expect(b.t).toBe(a.t);
-    expect(80 - b.r.battery).toBeCloseTo((80 - a.r.battery) * 0.6, 6);
+    expect(b.r.battery).toBeGreaterThan(a.r.battery);
+    // drains scale (shadow, deep shadow, driving); the small sunlight charge is the same in every mode
+    const dark = { ...createRover(MAP), x: MAP.shadows[0].x + 100, y: MAP.shadows[0].y - 200 };
+    expect(80 - stepRover(MAP, dark, NONE, 1, false, 0.6).rover.battery).toBeCloseTo(ROVER.shadowDrain * 0.6, 6);
+    const sunny = { ...createRover(MAP), x: 900, y: 200 };
+    expect(stepRover(MAP, sunny, NONE, 1, false, 0.6).rover.battery).toBeCloseTo(80 + ROVER.sunCharge, 6);
     // charging pad rate is the same in every mode
     const pad = { ...createRover(MAP), x: MAP.charger.x, y: MAP.charger.y, battery: 50 };
     expect(stepRover(MAP, pad, NONE, 1, false, 0.6).rover.battery).toBe(50 + ROVER.padCharge);
@@ -84,6 +90,59 @@ describe('rover difficulty settings', () => {
     expect(r.normal.end).toBeGreaterThan(r.hard.end + 15);
     expect(r.easy.end).toBeGreaterThan(r.normal.end + 15);
     expect(r.easy.pos).toEqual(r.hard.pos); // same route and end point
+  });
+
+  /** Mission 1 round trip: out by one route, repair (seconds at the site, in shadow, 6 rotations), home by a route. */
+  function m1(d: DifficultyId, out: RouteId, home: RouteId, repairSec: number) {
+    const tn = tuneOf(d);
+    const go = driveRoute(createRover(MAP, tn.batteryStart), ROUTES[out], tn.drainScale);
+    let r = go.rover;
+    for (let i = 0; i < repairSec * 60; i++) r = stepRover(MAP, r, NONE, 1 / 60, true, tn.drainScale).rover;
+    r = { ...r, battery: r.battery - 6 * tn.rotateCost };
+    const back = driveRoute(r, [...ROUTES[home].slice(0, -1).reverse(), DOCK], tn.drainScale);
+    return { arrive: go.rover.battery, arriveT: go.time, home: back.rover.battery, minHome: Math.min(r.battery, back.rover.battery), docked: Math.hypot(back.rover.x - DOCK[0], back.rover.y - DOCK[1]) < 40 };
+  }
+
+  it('Mission 1 in every mode: both routes reach the array; the shortcut is faster, the sunny detour saves battery', () => {
+    const rows = DIFFICULTY_IDS.map((d) => {
+      const s = m1(d, 'shadow', 'shadow', 15), y = m1(d, 'sunny', 'sunny', 15);
+      return { d, s, y };
+    });
+    // eslint-disable-next-line no-console
+    console.log('[M1 by difficulty]', rows.map(({ d, s, y }) =>
+      `${d}: shortcut ${s.arriveT.toFixed(1)}s arrive ${s.arrive.toFixed(1)} home ${s.home.toFixed(1)} | sunny ${y.arriveT.toFixed(1)}s arrive ${y.arrive.toFixed(1)} home ${y.home.toFixed(1)}`).join(' || '));
+    for (const { d, s, y } of rows) {
+      expect(s.docked && y.docked, d).toBe(true);
+      expect(s.arriveT).toBeLessThan(y.arriveT);
+      expect(y.arrive - s.arrive, d).toBeGreaterThan(4); // arrival gap grows with the drain scale
+      expect(y.home - s.home, d).toBeGreaterThan(8); // round trip: the sunny route keeps a clear reserve
+      expect(s.home, d).toBeGreaterThan(10); // the shortcut both ways is risky but possible with a normal repair
+    }
+    const hard = rows[2];
+    expect(hard.y.arrive - hard.s.arrive).toBeGreaterThan(7);
+    expect(hard.y.home - hard.s.home).toBeGreaterThan(12);
+    expect(rows[0].y.home).toBeGreaterThan(65); // Easy: a big reserve on the sunny route
+  });
+
+  it('Mission 1 on Hard: a slow repair after the shortcut leaves almost nothing — the sunny way home rescues it', () => {
+    const risky = m1('hard', 'shadow', 'shadow', 25);
+    const rescue = m1('hard', 'shadow', 'sunny', 25);
+    expect(risky.home).toBeLessThan(8);
+    expect(rescue.home).toBeGreaterThan(risky.home + 4);
+    expect(m1('normal', 'shadow', 'shadow', 25).home).toBeGreaterThan(20); // Normal: one slow repair is not fatal
+  });
+
+  it('Mission 2 full trip (depot, check all three valves, 15 s pressure work, dock) is possible in every mode', () => {
+    const v = (id: 'valveA' | 'valveB' | 'valveC'): [number, number] => [MAP.sites[id].x, MAP.sites[id].y];
+    for (const d of DIFFICULTY_IDS) {
+      const tn = tuneOf(d);
+      let r = driveRoute(createRover(MAP, tn.batteryStart), [[MAP.sites.depot.x + 60, MAP.sites.depot.y + 60]], tn.drainScale).rover;
+      r = driveRoute(r, [[90, 600], [80, 420], v('valveA'), v('valveB'), v('valveC')], tn.drainScale).rover;
+      for (let i = 0; i < 15 * 60; i++) r = stepRover(MAP, r, NONE, 1 / 60, true, tn.drainScale).rover;
+      const home = driveRoute(r, [[330, 300], [80, 420], [90, 600], [700, 760], DOCK], tn.drainScale);
+      expect(home.rover.battery, d).toBeGreaterThan(d === 'hard' ? 15 : 35);
+      expect(Math.hypot(home.rover.x - DOCK[0], home.rover.y - DOCK[1])).toBeLessThan(40);
+    }
   });
 
   it('Mission 1 circuit: the hint knows the right position of every rotatable tile', () => {

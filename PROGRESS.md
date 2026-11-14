@@ -1,6 +1,6 @@
 # PROGRESS — SUN: Lunar Outpost
 
-_Last updated: 2026-11-15 (difficulty modes, learning pages)_
+_Last updated: 2026-11-15 (rover route rebalance)_
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -16,7 +16,8 @@ _Last updated: 2026-11-15 (difficulty modes, learning pages)_
 | 10 | Save & continue (localStorage, versioned, exploration checkpoint) | ✅ Done |
 | 11 | Rover polish: graphics, mission effects, camera/feedback, battery warnings, performance | ✅ Done (emulator-tested only) |
 | 11b | Pixel / 2.5D redesign (OpenAI Codex, PR #1) | ✅ Merged by the team |
-| 12 | Difficulty modes, beginner help, Science & Credits learning hub, QA | ✅ Done on branch feature/difficulty-education-qa (awaiting review / student play-test) |
+| 12 | Difficulty modes, beginner help, Science & Credits learning hub, QA | ✅ Done on branch feature/difficulty-education-qa (PR #2, awaiting review / student play-test) |
+| 12b | Rover route rebalance (Mission 1 shortcut vs sunny detour), route guide in the briefing | ✅ Done on branch feature/rover-route-balance (stacked on PR #2) |
 | 6 | Public deployment, final QA, submission | ⏳ Needs GitHub/hosting account action by the team |
 
 ## Phase 5 delivered
@@ -60,9 +61,9 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 ## Rover exploration (P0, 2026-11-14)
 - New mode `src/ui/ExploreScreen.tsx` (Canvas 2D) + pure logic in `src/rover/`: `world.ts` (2600×1600 map: base, dock, charging pad, O₂ plant, solar farm with segment B, craters, boulder field, 4 shadow zones), `sim.ts` (acceleration, drag, smooth turning, normalised diagonals, circle/rect sliding collisions, battery), `circuit.ts` (3×3 rotation puzzle, 6 rotations), `render.ts` (terrain cached offscreen, lights, dust particles, headlight cone in shadow, objective marker + off-screen arrow, bump shake).
 - Controls: WASD/arrows drive, E interact, Esc pause (or leave puzzle), R restart with confirmation. Puzzle: click, or ←/→ + E/Space, or 1–3.
-- Rover battery (fictional, separate from base): start 80/100. Sunlight −0.4/s, shadow −1.5/s, deep shadow −3/s, driving adds −0.25/s, charging pad +12/s, puzzle rotation −0.5, and 0 triggers failure. The map shows the same training shadow boundaries used for battery drain. NASA's illumination value of 0.88444 is separate from these zones.
+- Rover battery (fictional, separate from base; values since 2026-11-15, Hard = ×1): start 80/100. Sunlight: the rover's solar deck trickle-charges +0.2/s while stopped (net −0.05/s while driving); shadow −2/s, deep shadow −3.5/s, driving adds −0.25/s in shadow, charging pad +12/s, puzzle rotation −0.5, and 0 triggers failure. Easy/Normal scale the drains (×0.6/×0.8), not the sunlight charge. The map shows the same training shadow boundaries used for battery drain. NASA's illumination value of 0.88444 is separate from these zones.
 - Mission 1 "Emergency solar array repair" (Shift 2, chosen because Shift 3 already has the O₂ emergency): from Shift 2 base solar is ×0.8 until repaired (persists into later shifts). Success restores 100 %. Each failed attempt (battery 0) costs the base 8 energy; retry is allowed. Base time does not pass during an expedition; App keeps the base state, only `applyExpedition` changes it.
-- Route measurements (bot, before the Codex merge): shadowed north shortcut ≈10.7 s / battery 72 at site; sunny south detour ≈12.2 s / 79. After the merge (sunlight now drains 0.4/s, larger shadows): north 64.4, south 65.0 (Hard). Real UI run: reach site 71.7, after puzzle in shadow 39, back at dock 24 (low-battery warning) — tension present.
+- Route measurements: see "Rover route rebalance" below (src/rover/routes.ts reference routes).
 - Balance with the repair (sensible bot): repair at Shift 2 → success 90; after 2 failed attempts → 84; never repaired → partial (research goal missed). Random clicking (with repair) 9 % success.
 
 ## Rover Mission 2 — oxygen plant repair (2026-11-14)
@@ -75,7 +76,7 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 
 ## Rover Mission 3 — science survey (2026-11-14)
 - Shift 8 (forecast-only shift), available to the end. An opportunity, not damage: success = research +1 milestone; each failed attempt −8 base energy. Skipping has no direct cost.
-- Three sample beacons in different directions, player chooses the order: S1 deep in a permanently shadowed crater floor (FICTIONAL training zone, heaters −3/s, frost visual), S2 sunny far east, S3 in a small-crater shadow. Stop and HOLD E for 4 s to drill (moving cancels); then dock.
+- Three sample beacons in different directions, player chooses the order: S1 deep in a permanently shadowed crater floor (FICTIONAL training zone, heaters −3.5/s on Hard, frost visual), S2 sunny far east, S3 in a small-crater shadow. Stop and HOLD E for 4 s to drill (moving cancels); then dock.
 - Measured (bot, 4 s drills): risky route through the deep zone ends with battery 53.7, safer southern edge 57.8; in real play, idling in the deep zone drained the rover to 0 (failure path verified).
 - Rover launcher: one "LAUNCH ROVER (n)" button opens a menu when several missions are pending (3 stacked buttons pushed the Advance button off a 768 px screen).
 - Fix found in play-test: changing an emergency decision from "Shelter the crew" to "Keep working" left the shelter ON (silent −7 energy); the previous decision's forced facility is now switched back off.
@@ -126,6 +127,21 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Science & Credits: 10 tabs (survive, NASA data, pole, power, life support, rovers, real vs game, questions, sources, team & AI), short text + "Learn more", glossary, 8 check questions linked to topics. New facts only from NASA Moon facts / LRO / Artemis pages (gravity 1/6, ≈127 °C / ≈−173 °C, thin exosphere, polar ice, 382 kg Apollo samples); no new measured values in the game.
 - Fixes: a power deficit caused by the chosen emergency response (e.g. shelter on Hard shift 11 with oxygen already off) now says the other response fits (regression test); vibration is skipped before the first tap (Chrome logged errors); menu footer audience; Korean particle after a number.
 
+## Rover route rebalance (2026-11-15)
+- **Cause:** after the pixel redesign the rover drained −0.4/s in sunlight (it used to charge +1/s) and the shadow zones grew ~20 %. The old "sunny south detour" waypoints then crossed the sample-crater and deep shadows, and the time in sun no longer paid off: on Hard the shortcut and the detour arrived with 64.4 vs 65.0 battery.
+- **Map unchanged** (pixel art and shadows kept). A grid search over the map showed a real sunny route: south along the sunlit edge of the boulder field, then north between the crater shadow and the ridge shadow. It is only ≈1 s slower than the shortest path (the sunny lane runs right next to the shadow), so the trade-off is made by battery: sunlight now trickle-charges (+0.2/s stopped, −0.05/s driving) and shadow drains more (−2/s, deep −3.5/s).
+- Reference routes (`src/rover/routes.ts`), measured with the game's simulation and confirmed by driving in the browser:
+
+| Mission 1 (to segment B) | Easy | Normal | Hard |
+|---|---|---|---|
+| Shadow shortcut: time / battery at site | 9.6 s / 91.7 | 9.6 s / 78.9 | 9.6 s / 66.0 |
+| Sunny detour: time / battery at site | 10.6 s / 96.5 | 10.6 s / 85.2 | 10.6 s / 73.6 |
+| Round trip (15 s repair) home via shortcut / via sunny | 63.6 / 72.8 | 40.8 / 52.8 | 18.1 / 32.7 |
+| Shortcut both ways + slow 25 s repair | — | > 20 | ≈ 1 (near failure) |
+
+- Other missions on Hard: Mission 3 safe survey ends with 22.5 (risky 19.3); Mission 2 full trip (depot, all three valves, 15 s pressure work, dock) ends > 15. Normal/Easy keep 35+ margins.
+- Briefing route guide (Mission 1): Easy = both routes explained with time and battery + mini map; Normal = one compact line + mini map; Hard = one sentence. The numbers are computed live by `routeEstimate` for the chosen difficulty, so the hint always matches the rules.
+
 ## Remaining (priority order)
 1. **P0** Repo is public at https://github.com/gonutyun-sketch/sun-lunar-outpost (pushed 2026-11-14, full history). Remaining: enable Pages (Settings → Pages → Source: GitHub Actions), re-run the workflow, add the live URL to README.
 2. **P1** Student play-test of Easy/Normal (real devices); tune `DIFFICULTIES` if needed. Review PR for feature/difficulty-education-qa and merge.
@@ -133,13 +149,14 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 4. **P2** Optional: sound, more scene detail.
 
 ## Known issues
-- Since the Codex merge the rover also drains in sunlight, so on Hard the Mission 1 sunny detour saves only ≈0.6 battery over the shadow shortcut (test still passes). Team decision: keep, or restore a bigger trade-off (would change rover rules).
+- Mission 1: the sunny detour is only ≈1 s slower than the shadow shortcut (the sunlit lane hugs the shadow edge); the trade-off is mainly battery. A bigger time gap would need map changes (more boulders or bigger shadows) — not done, to keep the pixel map.
+- The Mission 1 briefing on Easy is long on landscape phones (scrolls inside the card; the start button stays reachable).
 - The automated UI bots slow down when the browser pane renders below ~20 fps (dt cap 50 ms makes game time slower than real time); use the frame shim noted in tools/qa-playthrough.js.
 - Control panel may still scroll slightly at 1366×768 when 2+ warnings are shown (all critical warnings are now above the fold).
 - Mid-transition screenshots can show the fading shift banner (cosmetic).
 
-## Last test results (2026-11-15, difficulty + learning)
-- `npm run typecheck` ✅ · `npm test` ✅ 113/113 (new: 19 difficulty/coach/regression, 8 rover-by-difficulty, 5 save) · `npm run build` ✅ (dev hooks absent from bundle; production preview: no console errors).
-- Browser (dev server, UI bot + shortcuts for the minigames): full 12-shift games with all 3 rover missions on every mode — Easy success A 90, Normal success B 89, Hard success B 84 (Hard needed the "other response" at shift 11 → found and fixed the stuck-feeling warning). Continue after reload restored mode and shift; reload during Mission 1 kept mode and base state; New game over a saved mission asks first; results → New mission opens the difficulty screen with the last mode selected; a hand-made v1 save loaded as Hard with a notice and was re-saved as v2.
-- Viewport sweep (tools/qa-sweep.js, 28–29 screens incl. 10 science tabs, difficulty select, coach tips, 3 missions): 320×568, 375×667, 390×844, 844×390, 768×1024, 1024×768 (touch layout), 1366×768, 1920×1080 — all OK (no horizontal scroll, cut-off or overlapping controls, touch targets ≥ 44 px). Korean and English checked on the new screens.
-- NOT verified: real phones/tablets, real students (comprehension and difficulty feel), real vibration; the browser pane rendered slowly, so a timer frame shim was used for the automated runs.
+## Last test results (2026-11-15, rover route rebalance)
+- `npm run typecheck` ✅ · `npm test` ✅ 116/116 (3 new: M1 per-difficulty round trips, slow-repair risk, M2 full trip; battery rule and M1 route tests rewritten) · `npm run build` ✅.
+- Browser (dev server): Mission 1 driven with keyboard input on Hard — shortcut 10.2 s / 66.0 at the site, sunny detour 10.6 s / 73.9 (matches the simulation); repair + sunny return docked with 36. Battery 0 in shadow → failure, base energy −8 (Hard) applied once and saved. Full 12-shift games with all 3 missions: Easy A 90, Normal B 89, Hard B 84. Reload during Mission 1 keeps difficulty and base state. Touch joystick drive (390×844) works; English route guide checked.
+- Viewport sweep (28–29 screens incl. the longer Mission 1 briefing): 320×568, 375×667, 390×844, 844×390, 768×1024, 1024×768, 1366×768, 1920×1080 — all OK. No console errors.
+- NOT verified: real phones/tablets, real students; a timer frame shim was used because the browser pane was hidden.

@@ -12,9 +12,13 @@ export const ROVER = {
   turnRate: 10, // how fast the heading follows the velocity
   batteryMax: 100,
   batteryStart: 80,
-  sunDrain: 0.4, // net battery use per second in sunlight
-  shadowDrain: 1.5, // per second in shadow
-  deepDrain: 3, // per second in a permanently shadowed (deep) zone — heaters fight the cold
+  /**
+   * Sunlight: the rover's own solar deck covers its idle load and trickle-charges (+/s while stopped);
+   * driving uses more than the deck makes (net = sunCharge - moveDrain). Shadow: no solar, heaters on.
+   */
+  sunCharge: 0.2,
+  shadowDrain: 2, // per second in shadow (no solar power, electronics heated)
+  deepDrain: 3.5, // per second in a permanently shadowed (deep) zone — heaters fight the cold
   moveDrain: 0.25, // extra per second while moving
   padCharge: 12, // per second on the charging pad
   rotateCost: 0.5, // per circuit rotation (robot arm)
@@ -146,8 +150,10 @@ export function stepRover(m: WorldMap, prev: Rover, input: Input, dt: number, fr
   const level = shadowLevel(m, r.x, r.y);
   const shadow = level > 0;
   const charging = onCharger(m, r.x, r.y);
-  const terrainDrain = level === 2 ? ROVER.deepDrain : level === 1 ? ROVER.shadowDrain : ROVER.sunDrain;
-  const rate = charging ? ROVER.padCharge : -(terrainDrain + (moving ? ROVER.moveDrain : 0)) * drainScale;
+  const move = moving ? ROVER.moveDrain * drainScale : 0;
+  const rate = charging ? ROVER.padCharge
+    : level === 0 ? ROVER.sunCharge - move
+    : -(level === 2 ? ROVER.deepDrain : ROVER.shadowDrain) * drainScale - move;
   r.battery = Math.max(0, Math.min(ROVER.batteryMax, r.battery + rate * dt));
 
   return { rover: r, bumped, inShadow: shadow, deep: level === 2, charging, moving, rate };

@@ -3,7 +3,7 @@
  * and reports { success, failures } back to the base game on exit.
  * Missions are small step lists (MISSIONS below); each step kind has its own interaction.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { difficultyOf, missionFor, type DifficultyId } from '../game/difficulty';
 import { useI18n } from '../i18n/I18n';
 import type { Key } from '../i18n/translate';
@@ -11,6 +11,7 @@ import { createCircuit, isSolved, powered, rotateTile, targetMasks, wrongTiles, 
 import { createPressureGame, inBand, stepPressure, type PressureGame } from '../rover/pressure';
 import { addTrack, batteryLevel, burst, createVis, emit, pruneTracks, snapDirection, stepVis, trackMotion, updateCamera, type BurstKind, type Vis } from '../rover/fx';
 import { drawFrame, mapDistance, type Marker } from '../rover/render';
+import { DOCK, ROUTES, routeEstimate, type Pt } from '../rover/routes';
 import { createRover, dist, ROVER, stepRover, type Input, type Rover } from '../rover/sim';
 import { cameraZoom, joystickVector, knobOffset, renderDpr } from '../rover/touch';
 import { MAP, type Site } from '../rover/world';
@@ -72,6 +73,8 @@ const prefersTouch = () =>
   (window.matchMedia?.('(pointer: coarse)').matches || (navigator.maxTouchPoints ?? 0) > 0 || document.documentElement.classList.contains('touch'));
 
 const OVERLAY: StepKind[] = ['circuit', 'pressure'];
+/** +0.05 / −0.05 style for battery rates shown in text. */
+const signedRate = (v: number) => { const r = Number(v.toFixed(2)); return r === 0 ? '±0' : r > 0 ? `+${r}` : `−${Math.abs(r)}`; };
 
 /** Respect the OS "reduce motion" setting (no shake, particles or vibration; static feedback instead). */
 /** Short haptic pulse on phones that support it (ignored elsewhere). */
@@ -85,7 +88,8 @@ const buzz = (pattern: number | number[]) => {
 export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
   const { t } = useI18n();
   const def = MISSIONS[missionId];
-  const tune = difficultyOf(difficulty).rover;
+  const diffCfg = difficultyOf(difficulty);
+  const tune = diffCfg.rover;
   const tuneRef = useRef(tune);
   tuneRef.current = tune;
   const exp = missionFor(difficulty).expeditions.find((e) => e.id === missionId)!;
@@ -120,7 +124,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
   const batteryWarningsShown = useRef<0 | 1 | 2>(0);
   /** Shadow / deep-shadow alerts already shown this attempt (Easy and Normal). */
   const shadowAlerted = useRef(0);
-  const [hud, setHud] = useState<Hud>({ battery: tune.batteryStart, rate: -rateOf(ROVER.sunDrain), zone: 'sun', near: null, time: 0, drill: 0, distance: null });
+  const [hud, setHud] = useState<Hud>({ battery: tune.batteryStart, rate: ROVER.sunCharge, zone: 'sun', near: null, time: 0, drill: 0, distance: null });
   const [touchUI, setTouchUI] = useState(prefersTouch);
   touchRef.current = touchUI;
   const [portrait, setPortrait] = useState(() => typeof window !== 'undefined' && window.innerHeight > window.innerWidth);
@@ -621,7 +625,8 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
               <h2>{t(def.title)}</h2>
               <p>{t(def.brief, { pct, leak: exp.oxygenLeak ?? 0, reward: exp.rewardResearch ?? 0, deep: rateOf(ROVER.deepDrain) })}</p>
               <ol>{def.steps.map((s, i) => <li key={i}>{stepText(s)}</li>)}</ol>
-              <p className="ex-tip">{t('ex.brief.battery', { sun: rateOf(ROVER.sunDrain), shadow: rateOf(ROVER.shadowDrain), deep: rateOf(ROVER.deepDrain), move: rateOf(ROVER.moveDrain), charge: ROVER.padCharge })}</p>
+              {def.id === 'solarRepair' && <RouteGuide tone={diffCfg.help.tone} battery={tune.batteryStart} scale={tune.drainScale} />}
+              <p className="ex-tip">{t('ex.brief.battery', { sun: ROVER.sunCharge, sunMove: signedRate(ROVER.sunCharge - ROVER.moveDrain * tune.drainScale), shadow: rateOf(ROVER.shadowDrain), deep: rateOf(ROVER.deepDrain), move: rateOf(ROVER.moveDrain), charge: ROVER.padCharge })}</p>
               <p className="ex-tip ex-diff">{t('ex.diff', { name: t(`diff.${difficulty}.name` as Key), b: tune.batteryStart })}</p>
               {tune.circuitHint === 'path' && <p className="ex-tip ex-coach">{t(`ex.easy.${def.id}` as Key)}</p>}
               <p className="ex-tip">{touchUI ? t('ex.touch.controls') : t('ex.controls')}</p>
@@ -741,6 +746,58 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
         </span>
       </footer>
     </div>
+  );
+}
+
+/**
+ * Mission 1 route guide in the briefing. Times and battery use are computed with the game's own rover
+ * simulation for this difficulty (src/rover/routes.ts), so the hint always matches the real rules.
+ * Easy: both routes explained + map; Normal: one compact line + map; Hard: one short sentence.
+ */
+function RouteGuide({ tone, battery, scale }: { tone: 'friendly' | 'standard' | 'brief'; battery: number; scale: number }) {
+  const { t } = useI18n();
+  const est = useMemo(() => ({ shadow: routeEstimate('shadow', battery, scale), sunny: routeEstimate('sunny', battery, scale) }), [battery, scale]);
+  if (tone === 'brief') return <p className="ex-tip ex-route-hard">{t('ex.route.hard')}</p>;
+  const p = { t1: est.shadow.time, b1: est.shadow.used, t2: est.sunny.time, b2: est.sunny.used };
+  return (
+    <div className="ex-route">
+      <RouteMap />
+      <div className="ex-route-text">
+        {tone === 'friendly' ? (
+          <>
+            <b>{t('ex.route.title')}</b>
+            <p className="r-shadow"><i aria-hidden />{t('ex.route.shadow', { t: p.t1, b: p.b1 })}</p>
+            <p className="r-sunny"><i aria-hidden />{t('ex.route.sunny', { t: p.t2, b: p.b2 })}</p>
+            <p className="r-back">{t('ex.route.back')}</p>
+          </>
+        ) : (
+          <p>{t('ex.route.short', p)}</p>
+        )}
+        <small>{t('ex.route.note')}</small>
+      </div>
+    </div>
+  );
+}
+
+/** Small top-down map of Mission 1: shadow zones, crater, dock, segment B and the two reference routes. */
+function RouteMap() {
+  const { t } = useI18n();
+  const line = (pts: Pt[]) => [DOCK, ...pts].map((q) => q.join(',')).join(' ');
+  const b = MAP.sites.solarB;
+  return (
+    <svg className="ex-route-map" viewBox="560 120 1960 1100" role="img" aria-label={t('ex.route.mapAria')} shapeRendering="crispEdges">
+      <rect x="560" y="120" width="1960" height="1100" className="rm-ground" />
+      {MAP.shadows.map((z, i) => <circle key={i} cx={z.x} cy={z.y} r={z.r} className={z.deep ? 'rm-deep' : 'rm-shadow'} />)}
+      {MAP.craters.map((c, i) => <circle key={i} cx={c.x} cy={c.y} r={c.r} className="rm-crater" />)}
+      {MAP.rocks.map((c, i) => <circle key={i} cx={c.x} cy={c.y} r={c.r} className="rm-rock" />)}
+      {MAP.blocks.slice(2, 5).map((k, i) => <rect key={i} x={k.x} y={k.y} width={k.w} height={k.h} className="rm-panel" />)}
+      <polyline points={line(ROUTES.shadow)} className="rm-line shadow" />
+      <polyline points={line(ROUTES.sunny)} className="rm-line sunny" />
+      <rect x={DOCK[0] - 40} y={DOCK[1] - 40} width="80" height="80" className="rm-dock" />
+      <rect x={b.x - 36} y={b.y - 36} width="72" height="72" className="rm-site" />
+      <text x={DOCK[0]} y={DOCK[1] + 110} className="rm-label">{t('ex.route.legendDock')}</text>
+      <text x={b.x} y={b.y - 60} className="rm-label">{t('ex.route.legendSite')}</text>
+    </svg>
   );
 }
 

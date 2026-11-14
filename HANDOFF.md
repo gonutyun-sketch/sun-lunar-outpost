@@ -39,6 +39,7 @@ src/ui/BaseScene.tsx    SVG lunar base
 src/ui/ExploreScreen.tsx Rover exploration mode (Canvas loop, input, HUD, puzzle overlay, pause/fail/success)
 src/rover/world.ts      Exploration map data (craters, rocks, blocks, shadow zones, sites)
 src/rover/sim.ts        Rover physics + battery (pure, tested); stepRover(..., drainScale) and createRover(map, battery) for difficulty
+src/rover/routes.ts     Mission 1 reference routes (shadow shortcut / sunny detour), driveRoute, routeEstimate (briefing hints + tests)
 src/rover/circuit.ts    Circuit rotation puzzle (pure, tested)
 src/rover/pressure.ts   Pressure-regulation minigame (pure, tested)
 src/rover/render.ts     Canvas drawing (zoom-aware camera)
@@ -68,7 +69,7 @@ Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(ba
 - Config: mission.json `expeditions` (id, fromShift, solarMult, failEnergyCost). Engine: `activeExpedition`, `solarDamageMult`, `applyExpedition`. State: `expeditionsDone`, `expeditionFails`.
 - Flow: MissionScreen "LAUNCH ROVER" → App screen 'explore' (base state untouched) → ExploreScreen onExit({success, failures}) → applyExpedition → back to mission.
 - Missions are step lists in ExploreScreen `MISSIONS` (kinds: goto, circuit, pickup, scan, pressure, collect, dock). Mission 3 (sampleSurvey) uses `collect` (hold E, DRILL_TIME) and `rewardResearch`. To add more missions: add an expedition in mission.json (fromShift, effect), a MissionDef with steps (e.g. a new `sample` kind), sites in world.ts, and `ex.*` keys in en.ts/ko.ts. Engine effects available: solarMult, oxygenMult, oxygenLeak, failEnergyCost, failOxygenCost; `expeditionLog` feeds the shift report.
-- Tuning: ROVER constants in src/rover/sim.ts; map in world.ts; `npx vitest run src/rover` prints route times/battery.
+- Tuning: ROVER constants in src/rover/sim.ts (sunCharge is a small charge while stopped in sunlight and is NOT scaled by difficulty; shadow/deep/move drains are); map in world.ts; `npx vitest run src/rover` prints route times/battery per difficulty. If you change the map or ROVER values, keep `ROUTES` in routes.ts passable and re-check the M1 tests (sunny detour must keep > 7 battery over the shortcut on Hard).
 
 ## Difficulty modes
 - One engine. `DIFFICULTIES` in src/game/difficulty.ts holds per-mode values: `base` (initial supplies, crew use, eventDamage multiplier, upgrade costs, rover failure cost, O₂ leak), `rover` (battery start, drainScale, rotateCost, pressure band pad / hold / wobble, circuit hint, shadow alerts, charge guide) and `help` (coach mode, warning tone).
@@ -82,7 +83,7 @@ Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(ba
 
 ## Next tasks for the next AI
 1. Human play-test of Easy/Normal with students; adjust DIFFICULTIES values if needed (see Difficulty modes).
-2. Mission 1 route trade-off on Hard is now tiny (see PROGRESS.md Known issues) — team decision.
+2. Mission 1 route trade-off was rebalanced (PROGRESS.md "Rover route rebalance"); verify with students that the briefing map helps.
 3. After deployment: add URL to README, run a full playthrough on the live URL.
 4. Submission materials.
 
