@@ -8,6 +8,8 @@
 - Simulation engine and unit tests, implemented from the team's Game Design Document v1.0.
 - UI components and CSS.
 - Vector (SVG) illustrations of the lunar base, starfield and Moon — **AI-generated code-drawn artwork**, original, no external image assets.
+- Phase 5 visual polish (CSS/SVG effects), strategy & balance analysis tests, README and GitHub Pages workflow.
+- Gameplay screenshots in docs/screenshots/ are captures of the actual game (not generated images).
 - Draft educational text (science briefings, takeaways) — reviewed by the team for accuracy.
 
 ## Human contributions

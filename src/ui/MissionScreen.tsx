@@ -33,6 +33,19 @@ const COLORS: Record<keyof Resources, string> = {
   research: '#56C7F2',
 };
 
+/** Minimal 16px line icons for the resource dashboard. */
+function Icon({ k }: { k: keyof Resources }) {
+  const c = COLORS[k];
+  const paths: Record<keyof Resources, JSX.Element> = {
+    energy: <><rect x="2" y="4" width="11" height="8" rx="1.5" fill="none" stroke={c} strokeWidth="1.5" /><rect x="13" y="6.5" width="1.6" height="3" fill={c} /><path d="M7.5 5.5 L5.5 8.5 H8 L6.5 11" fill="none" stroke={c} strokeWidth="1.3" /></>,
+    oxygen: <><circle cx="6" cy="9" r="3.6" fill="none" stroke={c} strokeWidth="1.5" /><circle cx="11.5" cy="5" r="2.2" fill="none" stroke={c} strokeWidth="1.3" /></>,
+    food: <path d="M3 13 C3 6 8 3 13 3 C13 9 9 13 3 13 Z M3 13 L9 7" fill="none" stroke={c} strokeWidth="1.5" />,
+    health: <path d="M8 13.5 L2.8 8.3 A3 3 0 0 1 8 4.3 A3 3 0 0 1 13.2 8.3 Z" fill="none" stroke={c} strokeWidth="1.5" />,
+    research: <path d="M6 2.5 H10 M7 2.5 V7 L3 13 H13 L9 7 V2.5" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" />,
+  };
+  return <svg className="ico" viewBox="0 0 16 16" width="14" height="14" aria-hidden>{paths[k]}</svg>;
+}
+
 function Delta({ v }: { v: number }) {
   if (v === 0) return <span className="delta flat">±0</span>;
   return <span className={`delta ${v > 0 ? 'up' : 'down'}`}>{v > 0 ? `+${v}` : v}</span>;
@@ -45,7 +58,7 @@ function Stat({ name, k, value, next, warnAt, critAt }: {
   return (
     <div className={`stat ${cls}`}>
       <div className="stat-head">
-        <span className="name">{name}</span>
+        <span className="name"><Icon k={k} />{name}</span>
         <span>
           <span className="val">{value}</span>
           <Delta v={next - value} />
@@ -82,7 +95,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
   const ended = state.status !== 'playing';
 
   return (
-    <div className={`mission screen ${fx ? '' : 'no-fx'}`}>
+    <div className={`mission screen ${fx ? '' : 'no-fx'} ${sc.event === 'radiation' && !ended ? 'rad-alert' : ''}`}>
       {/* ---------- Top bar ---------- */}
       <header className="topbar panel">
         <div className="brand">
@@ -101,7 +114,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
           <Stat name="Crew Health" k="health" value={r.health} next={outcome.after.health} warnAt={70} critAt={40} />
           <div className="stat">
             <div className="stat-head">
-              <span className="name">Research</span>
+              <span className="name"><Icon k="research" />Research</span>
               <span>
                 <span className="val">{r.research}/{MISSION.capacity.research}</span>
                 <Delta v={outcome.after.research - r.research} />
@@ -123,7 +136,18 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
       {/* ---------- Center ---------- */}
       <div className="mission-main">
         <div className="scene-wrap panel">
-          <BaseScene facilities={state.facilities} illumination={outcome.illumination} radiation={sc.event === 'radiation'} shift={state.shift} />
+          <BaseScene key={`scene-${state.shift}`} facilities={state.facilities} illumination={outcome.illumination} radiation={sc.event === 'radiation'} shift={state.shift} highlight={eduFocus} />
+          {!ended && (
+            <div className="shift-banner" key={`banner-${state.shift}`} aria-hidden>
+              <span>SHIFT {state.shift}</span>
+              <small>{sc.event === 'radiation' ? 'SOLAR PARTICLE EVENT' : sc.event === 'warning' ? 'SPACE WEATHER WARNING' : '12-HOUR OPERATIONS CYCLE'}</small>
+            </div>
+          )}
+          {sc.event && !ended && (
+            <div className={`event-strip ${sc.event}`} role="status">
+              <b>{sc.event === 'radiation' ? '☢ RADIATION ALERT' : '⚠ SPACE WEATHER FORECAST'}</b> {briefing?.text.replace(/^[^:]*: /, '')}
+            </div>
+          )}
           <div className="scene-overlay">
             <div className="chip">
               <span className="k">Solar this shift</span>
@@ -143,7 +167,6 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
 
         <aside className="controls panel" aria-label="System controls">
           <h2>SYSTEM CONTROL</h2>
-          {briefing && <div className={`alert ${briefing.level}`} role="status">{briefing.text}</div>}
 
           <div className="fac on locked">
             <div className="title"><span className="led" />Main Habitat</div>
@@ -161,8 +184,8 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
               : id === 'shelter' ? (sc.event === 'radiation' ? 'Protects crew NOW' : 'Protects during radiation alerts')
               : available ? '+1 research milestone' : 'All milestones complete';
             return (
-              <div key={id} className={`fac ${on ? 'on' : ''}`} onMouseEnter={() => setEduFocus(id)} onFocus={() => setEduFocus(id)}>
-                <div className="title"><span className="led" />{FACILITY_LABELS[id]}</div>
+              <div key={id} className={`fac ${on ? 'on' : ''}`} onMouseEnter={() => setEduFocus(id)} onMouseLeave={() => setEduFocus(null)} onFocus={() => setEduFocus(id)} onBlur={() => setEduFocus(null)}>
+                <div className="title"><span className="led" />{FACILITY_LABELS[id]}<span className={`state ${on ? 'on' : ''}`}>{on ? 'ONLINE' : 'STANDBY'}</span></div>
                 <button
                   className="switch"
                   role="switch"
@@ -176,6 +199,12 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
             );
           })}
 
+          {warnings.length > 0 && (
+            <div className="alerts" role="alert">
+              {warnings.map((w, i) => <div key={i} className={`alert ${w.level}`}>{w.text}</div>)}
+            </div>
+          )}
+
           <div className="power-budget">
             <div className="tag">Power budget</div>
             <div className="power-meter" aria-hidden>
@@ -188,11 +217,6 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
             <div className="power-row total"><span>Battery after shift</span><span className="v" style={{ color: allowed ? 'var(--yellow)' : 'var(--red)' }}>{allowed ? outcome.after.energy : `−${outcome.optionalDeficit}`}</span></div>
           </div>
 
-          {warnings.length > 0 && (
-            <div className="alerts" role="alert">
-              {warnings.map((w, i) => <div key={i} className={`alert ${w.level}`}>{w.text}</div>)}
-            </div>
-          )}
         </aside>
       </div>
 

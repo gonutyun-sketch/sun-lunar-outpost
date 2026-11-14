@@ -160,8 +160,8 @@ export function Credits({ onBack }: { onBack: () => void }) {
           ))}
         </div>
         <p>
-          All three values come from the same NASA map. Moving only ~150 m off the ridge crest drops the average
-          sunlight from 88% to 55%, and the nearby crater floor never sees the Sun at all. In this game, running the same
+          All three values come from the same NASA map. Averaged over just a 300 m × 300 m patch around the ridge crest,
+          sunlight falls from 88% to 55%, and the nearby crater floor never sees the Sun at all. In this game, running the same
           8-shift scenario with the 300 m average instead of the ridge value would give <b>{siteSolar.alt}</b> energy
           instead of <b>{siteSolar.site}</b>. That is {Math.round((1 - siteSolar.alt / siteSolar.site) * 100)}% less
           power for the same base. <span className="badge-data game">GAME CALCULATION</span>
@@ -252,6 +252,18 @@ function HistoryGraph({ state }: { state: GameState }) {
         {Array.from({ length: n + 1 }, (_, i) => (
           <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="#8ea3bd">{i === 0 ? 'Start' : `S${i}`}</text>
         ))}
+        {MISSION.shifts.filter((s) => s.event === 'radiation').map((s) => {
+          const h = state.history.find((r) => r.shift === s.shift);
+          const col = !h ? '#56606f' : h.radiation === 'exposed' ? '#ff6b7a' : '#6CE0B2';
+          return (
+            <g key={s.shift}>
+              <rect x={x(s.shift - 1)} y={T} width={x(s.shift) - x(s.shift - 1)} height={H - T - B} fill={col} opacity="0.08" />
+              <text x={(x(s.shift - 1) + x(s.shift)) / 2} y={T + 12} textAnchor="middle" fontSize="10" fill={col}>
+                ☢ {!h ? '' : h.radiation === 'exposed' ? 'exposed' : 'sheltered'}
+              </text>
+            </g>
+          );
+        })}
         <line x1={L} x2={W - R} y1={y(MISSION.failure.minHealth)} y2={y(MISSION.failure.minHealth)} stroke="#ff8fa0" strokeDasharray="4 4" strokeOpacity="0.5" />
         {SERIES.map((s) => (
           <g key={s.k}>
@@ -279,18 +291,32 @@ export function Results({ state, onRestart, onMenu }: { state: GameState; onRest
           <h1>{missionTitle(state)}</h1>
           <p>{missionSummary(state, MISSION)}</p>
         </div>
-        <div className="grade">
-          <div className="letter">{score.grade}</div>
-          <div className="pts">{score.total} / 100</div>
+        <div className="grade grade-ring" aria-label={`Grade ${score.grade}, ${score.total} of 100 points`}>
+          <svg viewBox="0 0 120 120" aria-hidden>
+            <circle cx="60" cy="60" r="52" fill="none" stroke="#1d2b40" strokeWidth="9" />
+            <circle className="ring-fg" cx="60" cy="60" r="52" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round"
+              strokeDasharray={2 * Math.PI * 52} strokeDashoffset={2 * Math.PI * 52 * (1 - score.total / 100)} />
+          </svg>
+          <div className="inner">
+            <div className="letter">{score.grade}</div>
+            <div className="pts">{score.total} / 100</div>
+          </div>
         </div>
       </section>
       <div className="results-grid">
         <section className="score-card panel">
           <h2>SCORE</h2>
-          <div className="score-row"><span>Mission survival</span><span className="v">{score.survival} / 40</span></div>
-          <div className="score-row"><span>Research ({state.resources.research}/{MISSION.capacity.research})</span><span className="v">{score.research} / 30</span></div>
-          <div className="score-row"><span>Crew safety (health {state.resources.health})</span><span className="v">{score.safety} / 20</span></div>
-          <div className="score-row"><span>Energy reserve ({state.resources.energy})</span><span className="v">{score.energy} / 10</span></div>
+          {([
+            ['Mission survival', score.survival, 40],
+            [`Research (${state.resources.research}/${MISSION.capacity.research})`, score.research, 30],
+            [`Crew safety (health ${state.resources.health})`, score.safety, 20],
+            [`Energy reserve (${state.resources.energy})`, score.energy, 10],
+          ] as [string, number, number][]).map(([label, v, max]) => (
+            <div className="score-row" key={max}>
+              <span>{label}</span><span className="v">{v} / {max}</span>
+              <span className="mini" aria-hidden><i style={{ width: `${(v / max) * 100}%` }} /></span>
+            </div>
+          ))}
           <div className="score-row total"><span>Total</span><span className="v">{score.total}</span></div>
         </section>
         <section className="graph-card panel">

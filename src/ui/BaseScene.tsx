@@ -1,4 +1,4 @@
-import type { Facilities } from '../game/types';
+import type { Facilities, FacilityId } from '../game/types';
 
 /** Deterministic pseudo-random stars so the scene is identical on every render. */
 function stars(n: number, w: number, h: number, seed = 7) {
@@ -13,7 +13,21 @@ interface Props {
   illumination: number;
   radiation: boolean;
   shift: number;
+  /** Facility whose control card is hovered/focused — highlighted in the scene. */
+  highlight?: FacilityId | null;
 }
+
+/** Ground anchor (x centre, half-width) of each facility, for highlight rings and power cables. */
+const SPOTS: Record<FacilityId, { x: number; w: number }> = {
+  oxygen: { x: 366, w: 52 },
+  greenhouse: { x: 632, w: 62 },
+  shelter: { x: 770, w: 62 },
+  lab: { x: 898, w: 58 },
+};
+const HAB_X = 495;
+
+/** Deterministic radiation particle streaks. */
+const STREAKS = Array.from({ length: 14 }, (_, i) => ({ x: 40 + ((i * 137) % 900), d: (i % 7) * 0.25, l: 30 + (i % 4) * 14 }));
 
 const Label = ({ x, y, text, on }: { x: number; y: number; text: string; on?: boolean }) => (
   <g>
@@ -28,7 +42,7 @@ const Led = ({ x, y, on }: { x: number; y: number; on: boolean }) => (
   <circle cx={x} cy={y} r={4} fill={on ? '#6CE0B2' : '#3a4a60'} className={on ? 'blink' : undefined} />
 );
 
-export function BaseScene({ facilities: f, illumination, radiation, shift }: Props) {
+export function BaseScene({ facilities: f, illumination, radiation, shift, highlight }: Props) {
   const sunY = 300 - illumination * 60; // the Sun skims the polar horizon
   const panelGlow = Math.max(0.15, illumination);
   return (
@@ -98,8 +112,32 @@ export function BaseScene({ facilities: f, illumination, radiation, shift }: Pro
         <path d="M640 404 L900 410 L900 416 L640 414Z" />
       </g>
 
-      {/* Radiation event tint */}
-      {radiation && <rect width="1000" height="520" fill="url(#radGlow)" className="rad-pulse" />}
+      {/* Low-light dimming of the terrain: darker shifts are visibly darker */}
+      <rect width="1000" height="520" fill="#02040a" opacity={(1 - illumination) * 0.5} className="panel-glow" />
+
+      {/* Small rover parked by the habitat */}
+      <g transform="translate(470 474)">
+        <rect x="0" y="0" width="34" height="10" rx="3" fill="#c9d0da" />
+        <rect x="6" y="-8" width="14" height="8" rx="2" fill="#8d97a6" />
+        <line x1="26" y1="0" x2="30" y2="-12" stroke="#9aa4b2" strokeWidth="1.5" />
+        <circle cx="30" cy="-13" r="2" fill="#56C7F2" />
+        {[5, 17, 29].map((x) => <circle key={x} cx={x} cy="12" r="4" fill="#3a3f4b" stroke="#8d97a6" />)}
+      </g>
+
+      {/* Radiation event tint + particle streaks */}
+      {radiation && (
+        <g>
+          <rect width="1000" height="520" fill="url(#radGlow)" className="rad-pulse" />
+          {STREAKS.map((s, i) => (
+            <line key={i} x1={s.x} y1={-40} x2={s.x + s.l * 0.6} y2={-40 + s.l} stroke="#FF986A" strokeWidth="2" strokeLinecap="round" className="rad-streak" style={{ animationDelay: `${s.d}s` }} />
+          ))}
+        </g>
+      )}
+
+      {/* Highlight ring for the hovered control card */}
+      {highlight && (
+        <ellipse cx={SPOTS[highlight].x} cy={406} rx={SPOTS[highlight].w + 10} ry={12} fill="none" stroke="#56C7F2" strokeWidth="2.5" className="hl-ring" />
+      )}
 
       {/* ---- Solar array (vertical panels track the low Sun) ---- */}
       <g>
@@ -122,8 +160,17 @@ export function BaseScene({ facilities: f, illumination, radiation, shift }: Pro
         <Label x={205} y={438} text={`Solar Array · ${Math.round(illumination * 100)}%`} on={illumination >= 0.5} />
       </g>
 
-      {/* power cables */}
-      <path d="M300 403 Q360 412 420 402 M560 404 Q620 416 680 404 M560 404 Q700 430 840 404" stroke="#56C7F2" strokeOpacity="0.35" strokeWidth="2" fill="none" />
+      {/* Power cables: solar -> habitat always; habitat -> each facility, animated when it draws power */}
+      <path d="M300 404 Q380 414 440 404" stroke="#F4CA65" strokeOpacity={0.25 + illumination * 0.5} strokeWidth="2.5" fill="none" strokeDasharray="6 6" className="flow" />
+      {(Object.keys(SPOTS) as FacilityId[]).map((id) => {
+        const tx = SPOTS[id].x;
+        const d = `M${HAB_X} 406 Q${(HAB_X + tx) / 2} ${418 + Math.abs(tx - HAB_X) * 0.04} ${tx} 406`;
+        return (
+          <path key={id} d={d} fill="none" strokeWidth="2"
+            stroke={f[id] ? '#56C7F2' : '#3a4a60'} strokeOpacity={f[id] ? 0.85 : 0.5}
+            strokeDasharray={f[id] ? '6 6' : '2 6'} className={f[id] ? 'flow' : undefined} />
+        );
+      })}
 
       {/* ---- Oxygen recycling ---- */}
       <g>

@@ -25,6 +25,7 @@ src/game/config.ts      Loads mission.json as MissionConfig
 src/game/engine.ts      PURE simulation: simulateShift, advanceShift, getWarnings, computeScore
 src/game/debrief.ts     Results text + 3 takeaways
 src/game/engine.test.ts Unit tests (incl. a reference winning plan = 95/A)
+src/game/balance.test.ts Strategy tests + exhaustive decision-path analysis (prints [balance] line)
 src/ui/MissionScreen.tsx Top bar, scene, controls, power budget, log, shift report modal
 src/ui/BaseScene.tsx    SVG lunar base
 src/ui/Screens.tsx      Starfield, MainMenu, HowToPlay, Credits, Results (+ graph)
@@ -45,12 +46,24 @@ Per shift, in `simulateShift`:
 10. fail if oxygen ≤ 0, food ≤ 0, health < 40. After shift 8: research 3 → success else partial.
 Score: survival 40 (success/partial) + 10/milestone + round(20·health/100) + round(10·min(battery,30)/30).
 
+## Deployment (not done yet — needs the team's accounts)
+Option A — GitHub Pages (workflow already in .github/workflows/deploy.yml):
+1. Create an empty public repo on github.com (e.g. sun-lunar-outpost), no README.
+2. `git remote add origin https://github.com/<user>/sun-lunar-outpost.git`
+3. `git push -u origin main`
+4. Repo Settings → Pages → Source: "GitHub Actions". The workflow runs typecheck + tests + build and publishes.
+5. URL: https://<user>.github.io/sun-lunar-outpost/ → put it in README "Live demo".
+Option B — fastest, no Git: `npm run build`, then drag the `dist/` folder onto https://app.netlify.com/drop.
+(vite base is './', so the build works under any sub-path.)
+
 ## Next tasks for the next AI
-1. Phase 5 polish ONLY after team review (see PROGRESS.md).
-2. README.md, deploy (static dist/), screenshots, submission checklist.
+1. After deployment: add URL to README, run a full playthrough on the live URL.
+2. Apply the team's difficulty decision (see PROGRESS.md "Balance findings") if any.
+3. Submission materials.
 
 ## Cautions
-- Keep engine pure (no React imports). Any rule change → update engine tests.
+- Keep engine pure (no React imports). Any rule change → update engine + balance tests.
+- React keys: scene and shift banner share a parent — keep their keys distinct (scene-N / banner-N), or old scenes stack up.
 - Never present gameplay values as NASA-measured. Only site.json averageSunlitFraction + nearbyComparisons are NASA-derived; UI marks them with the green NASA badge, everything else with the orange SCENARIO badge.
 - To change site: run the tool with new lat/lon, update site.json, re-check that solar values / balance tests still hold.
 - Never commit secrets/.env (already in .gitignore).

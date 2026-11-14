@@ -1,38 +1,38 @@
 # PROGRESS — SUN: Lunar Outpost
 
-_Last updated: 2026-11-14_
-
-## Status summary
-P0 + P1 data work complete. Full 8-shift mission playable; solar power now uses a verified NASA LRO/LOLA value.
+_Last updated: 2026-11-14 (Phase 5)_
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Project setup, base UI | ✅ Done |
-| 2 | Resources, facilities, power budget, turns | ✅ Done |
-| 3 | Radiation events, win/partial/fail, scoring | ✅ Done |
-| 4 | NASA LOLA illumination integration + Science & Credits | ✅ Done (awaiting team review) |
-| 5 | Design/animation polish, sound (optional) | ⏳ Next — wait for review |
-| 6 | Full QA, README, deployment, submission assets | ⏳ Not started |
+| 1–3 | Setup, resources/facilities/turns, events, win/fail, scoring | ✅ Done |
+| 4 | NASA LRO/LOLA illumination (0.88444) in solar formula, Science & Credits | ✅ Done (approved) |
+| 5 | Science clarity, strategy testing, visual polish, deploy prep | ✅ Done (awaiting review) |
+| 6 | Public deployment, final QA, submission | ⏳ Needs GitHub/hosting account action by the team |
 
-## Phase 4 — NASA data used
-- Product: `AVGVISIB_85S_060M_201608` (LRO/LOLA average solar illumination, 85°S–90°S, 60 m/px), PDS LRO-L-LOLA-4-GDR-V1.0 V1.05, via https://pgda.gsfc.nasa.gov/products/69
-- Site: 89.4749°S, 137.4431°W (222.5569°E), ridge near Shackleton crater. DN 22111 × 0.00004 = **0.88444** (fraction of time sunlit by any part of the solar disc, averaged over 18.6 years). Equals the map's DERIVED_MAXIMUM.
-- Comparisons (same map): 300 m window mean 0.5536; Shackleton floor 0.
-- Extraction: `tools/extract-illumination.mjs` (HTTP Range, ~50 KB/site). Orientation verified with 5 PSR crater floors (≈0).
-- Integration: `sunlight = min(1, 0.88444 × scenarioModifier)`; `solar = round(30 × sunlight)`. Scenario modifiers (fictional) were chosen so solar values stay 27,24,17,8,11,20,29,18 → balance unchanged.
-- SVS 4930 cited as visual reference only (no numbers taken).
+## Phase 5 delivered
+- Science: 88.44% explained as long-term Sun visibility (not efficiency/forecast) on Credits + mission tooltip; "Why the site matters" bars (88.4 / 55.4 / 0%) and game calculation (ridge 154 vs 300 m-average 95 energy over 8 shifts); badges "NASA LOLA" vs "FICTIONAL SCENARIO".
+- Tests: `src/game/balance.test.ts` — 7 named strategies + exhaustive search of all legal decision paths (9,395 states) + restart check.
+- Visuals: terrain dims with sunlight; animated power cables to running facilities; hover card ⇄ scene highlight ring; ONLINE/STANDBY tags; resource icons; shift banner transition; radiation streaks, red pulsing frame and alert strip; results grade ring, score bars, radiation bands on history graph.
+- Layout: event briefing moved into scene strip; warnings above power budget (1366×768).
+- Deploy prep: README.md, docs/screenshots/, `.github/workflows/deploy.yml` (GitHub Pages), branch renamed to `main`.
+
+## Balance findings (for team decision — NOT changed)
+Random-legal-choice player outcome (exact, all paths): success 45.0%, partial 12.4%, fail 42.7%; best score 100.
+- No constant strategy (same switches every shift) wins → decisions matter.
+- All-ON fails (power, Shift 4); no-oxygen / no-greenhouse / two unsheltered radiation events all fail.
+- Game is fairly forgiving. Tested tweaks (random-player success): initial energy 45 → 36.0%; energy 40 → 28.7%; oxygen use 16 → 29.7%; food use 14 → 37.8%; lab cost 10 → 37.6%; O2 55 & food 60 → 32.9%. All remain winnable.
 
 ## Remaining (priority order)
-1. **P1** README.md (description, how to play, citations), screenshots.
-2. **P1** Git remote + push; static deploy.
-3. **P2** Phase 5 polish (shift transitions, scene detail, optional sound).
-4. **P1** Final end-to-end QA at 1366×768, submission checklist.
+1. **P0** Create GitHub repo, push, enable Pages (steps in HANDOFF.md) → public demo URL, add to README.
+2. **P1** Team decision on difficulty (above). If changed: update mission.json + tests.
+3. **P1** Final submission: Space Apps project page, demo video, AI disclosure.
+4. **P2** Optional: sound, more scene detail.
 
-## Known bugs / notes
-- No git remote configured yet — commits are local only.
-- At 1366×768 the System Control panel scrolls when several warnings appear.
-- Site name kept cautious ("ridge near Shackleton crater"); we did not verify it lies on a specifically named ridge.
+## Known issues
+- No git remote yet; commits local only.
+- Control panel may still scroll slightly at 1366×768 when 2+ warnings are shown (all critical warnings are now above the fold).
+- Mid-transition screenshots can show the fading shift banner (cosmetic).
 
-## Last test results (2026-11-14, after Phase 4)
-- `npm run typecheck` ✅  `npm test` ✅ 20/20  `npm run build` ✅
-- Browser 1366×768: reference plan → Mission Successful 95/100 A (unchanged); solar chip shows NASA vs SCENARIO badges; Science & Credits renders citations. No console errors.
+## Last test results (2026-11-14)
+- `npm run typecheck` ✅ · `npm test` ✅ 30/30 (2 files) · `npm run build` ✅ (JS 63 KB gzip)
+- Browser 1366×768: full success 95 A (reference) and 97 A (late-lab plan); 90 A with one unsheltered radiation event; failure (oxygen) path; restart resets to Shift 1 with initial values; no new console errors after duplicate-key fix.
