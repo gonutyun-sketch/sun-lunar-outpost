@@ -74,11 +74,11 @@ export function isFacilityAvailable(state: GameState, cfg: MissionConfig, id: Fa
 }
 
 export function energyDemand(cfg: MissionConfig, facilities: Facilities) {
-  const breakdown: { label: string; cost: number }[] = [
-    { label: 'Main Habitat', cost: cfg.habitat.energyCost },
+  const breakdown: ShiftOutcome['demandBreakdown'] = [
+    { id: 'habitat', label: 'Main Habitat', cost: cfg.habitat.energyCost },
   ];
   (Object.keys(cfg.facilities) as FacilityId[]).forEach((id) => {
-    if (facilities[id]) breakdown.push({ label: FACILITY_LABELS[id], cost: facilityCost(cfg, id) });
+    if (facilities[id]) breakdown.push({ id, label: FACILITY_LABELS[id], cost: facilityCost(cfg, id) });
   });
   return { total: breakdown.reduce((s, b) => s + b.cost, 0), breakdown };
 }
@@ -232,31 +232,37 @@ export function getWarnings(state: GameState, cfg: MissionConfig, o: ShiftOutcom
   if (o.habitatPowerFailure) {
     w.push({
       level: 'critical',
+      code: 'habitatFail',
+      params: { available: o.available, habitat: cfg.habitat.energyCost },
       text: `Battery + solar (${o.available}) cannot cover the Main Habitat (${cfg.habitat.energyCost}). Advancing will end the mission.`,
     });
   } else if (o.optionalDeficit > 0) {
     w.push({
       level: 'critical',
+      code: 'deficit',
+      params: { deficit: o.optionalDeficit, demand: o.demand, available: o.available },
       text: `Power deficit of ${o.optionalDeficit}: switch off systems before advancing (need ${o.demand}, have ${o.available}).`,
     });
   }
   if (sc.event === 'radiation' && !state.facilities.shelter) {
-    w.push({ level: 'critical', text: 'Radiation alert this shift — the shelter is OFF. Crew health will drop by 35.' });
+    w.push({ level: 'critical', code: 'radNoShelter', params: { dmg: cfg.radiation.healthDamage }, text: `Radiation alert this shift — the shelter is OFF. Crew health will drop by ${cfg.radiation.healthDamage}.` });
   }
-  if (o.after.oxygen <= 0) w.push({ level: 'critical', text: 'Oxygen will run out this shift.' });
-  else if (o.after.oxygen <= 20) w.push({ level: 'caution', text: `Oxygen will be low (${o.after.oxygen}).` });
-  if (o.after.food <= 0) w.push({ level: 'critical', text: 'Food will run out this shift.' });
-  else if (o.after.food <= 20) w.push({ level: 'caution', text: `Food will be low (${o.after.food}).` });
+  if (o.after.oxygen <= 0) w.push({ level: 'critical', code: 'o2Out', text: 'Oxygen will run out this shift.' });
+  else if (o.after.oxygen <= 20) w.push({ level: 'caution', code: 'o2Low', params: { v: o.after.oxygen }, text: `Oxygen will be low (${o.after.oxygen}).` });
+  if (o.after.food <= 0) w.push({ level: 'critical', code: 'foodOut', text: 'Food will run out this shift.' });
+  else if (o.after.food <= 20) w.push({ level: 'caution', code: 'foodLow', params: { v: o.after.food }, text: `Food will be low (${o.after.food}).` });
 
   if (!o.habitatPowerFailure && o.optionalDeficit === 0 && state.shift < cfg.totalShifts) {
     const nextSolar = solarGeneration(cfg, state.shift + 1);
     if (o.after.energy + nextSolar < cfg.habitat.energyCost) {
       w.push({
         level: 'critical',
+        code: 'nextHabitat',
+        params: { energy: o.after.energy, solar: nextSolar, habitat: cfg.habitat.energyCost },
         text: `Next shift: battery ${o.after.energy} + solar ${nextSolar} will not power the habitat (${cfg.habitat.energyCost}).`,
       });
     } else if (o.after.energy < 15) {
-      w.push({ level: 'caution', text: `Battery reserve will be very low (${o.after.energy}).` });
+      w.push({ level: 'caution', code: 'batteryLow', params: { v: o.after.energy }, text: `Battery reserve will be very low (${o.after.energy}).` });
     }
   }
   return w;

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
 
 :root {
   --space: #080d19;
@@ -13,8 +13,8 @@
   --red: #ff6b7a;
   --text: #e6eef8;
   --muted: #8ea3bd;
-  --display: 'Orbitron', 'Segoe UI', sans-serif;
-  --body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --display: 'Orbitron', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif;
+  --body: 'Inter', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', system-ui, sans-serif;
   --radius: 10px;
 }
 
@@ -344,3 +344,21 @@ h1, h2, h3 { font-family: var(--display); letter-spacing: 0.04em; margin: 0; }
 .event-strip { font-family: var(--body); letter-spacing: 0; font-weight: 500; font-size: 12px; text-align: left; padding: 8px 12px; }
 .event-strip b { font-family: var(--display); letter-spacing: 0.1em; margin-right: 6px; }
 .power-row { padding: 1px 0; }
+
+/* ===== Localisation (KO/EN) ===== */
+html[lang='ko'] body { word-break: keep-all; overflow-wrap: break-word; }
+html[lang='ko'] h1, html[lang='ko'] h2 { letter-spacing: 0.01em; }
+.lang-toggle { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; background: rgba(8, 13, 25, 0.6); flex: none; }
+.lang-toggle button { border: 0; background: transparent; color: var(--muted); padding: 6px 12px; font-size: 12px; font-weight: 600; font-family: var(--body); }
+.lang-toggle button + button { border-left: 1px solid var(--line); }
+.lang-toggle button.active { background: rgba(86, 199, 242, 0.18); color: var(--text); }
+.lang-toggle button:hover:not(.active) { color: var(--text); }
+.lang-toggle.compact button { padding: 5px 8px; font-size: 11px; }
+.menu-lang { position: absolute; top: 20px; right: max(20px, env(safe-area-inset-right, 0px)); }
+.menu .title-sub { font-size: 18px; color: var(--blue); letter-spacing: 0.3em; margin-top: -14px; font-weight: 500; }
+.info-page .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.results { position: relative; }
+.results-lang { display: flex; justify-content: flex-end; }
+.grade-scale { margin-top: 8px; font-size: 11px; color: var(--muted); }
+.topbar-actions { flex-wrap: nowrap; }
+.stat-head .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -71,8 +71,14 @@ export type FailReason = 'oxygen' | 'food' | 'health' | 'power';
 export type RadiationOutcome = 'none' | 'protected' | 'exposed';
 
 export type WarningLevel = 'info' | 'caution' | 'critical';
+export type WarningCode =
+  | 'habitatFail' | 'deficit' | 'radNoShelter' | 'o2Out' | 'o2Low' | 'foodOut' | 'foodLow' | 'nextHabitat' | 'batteryLow';
 export interface Warning {
   level: WarningLevel;
+  /** Stable message id for localisation (UI translates `warn.<code>` with `params`). */
+  code?: WarningCode;
+  params?: Record<string, number>;
+  /** English text (kept for logs/tests). */
   text: string;
 }
 
@@ -86,7 +92,7 @@ export interface ShiftOutcome {
   /** Battery after solar charging (capped at capacity), before any demand. */
   available: number;
   demand: number;
-  demandBreakdown: { label: string; cost: number }[];
+  demandBreakdown: { id: FacilityId | 'habitat'; label: string; cost: number }[];
   /** Habitat cannot be powered => mission failure. */
   habitatPowerFailure: boolean;
   /** Optional systems need more energy than is available => turn must not execute. */

@@ -19,7 +19,8 @@ npm run build      # -> dist/
 src/data/mission.json   All tunable numbers from GDD (resources, costs, FICTIONAL shift scenarioModifier, events)
 src/data/site.json      NASA LRO/LOLA-derived site value + full provenance (do not edit without re-extracting)
 tools/extract-illumination.mjs  Reproducible NASA pixel extraction (HTTP Range); node tools/extract-illumination.mjs
-src/data/education.ts   Science briefing text (per shift + per facility)
+src/i18n/en.ts, ko.ts   UI text dictionaries (KO default). Add a key to en.ts → TypeScript requires it in ko.ts
+src/i18n/I18n.tsx       Language context, LangToggle, localStorage 'sun-lang'
 src/game/types.ts       Shared types
 src/game/config.ts      Loads mission.json as MissionConfig
 src/game/engine.ts      PURE simulation: simulateShift, advanceShift, getWarnings, computeScore
@@ -62,6 +63,8 @@ Option B — fastest, no Git: `npm run build`, then drag the `dist/` folder onto
 3. Submission materials.
 
 ## Cautions
+- Never hard-code UI text in components: add it to src/i18n/en.ts + ko.ts and use t('key'). Keep {placeholders} identical (tested).
+- Avoid Korean particles (을/를, 이/가) directly after {number} placeholders — use 만큼 or rephrase.
 - Keep engine pure (no React imports). Any rule change → update engine + balance tests.
 - React keys: scene and shift banner share a parent — keep their keys distinct (scene-N / banner-N), or old scenes stack up.
 - Never present gameplay values as NASA-measured. Only site.json averageSunlitFraction + nearbyComparisons are NASA-derived; UI marks them with the green NASA badge, everything else with the orange SCENARIO badge.

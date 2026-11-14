@@ -1,4 +1,5 @@
 import type { Facilities, FacilityId } from '../game/types';
+import { useI18n } from '../i18n/I18n';
 
 /** Deterministic pseudo-random stars so the scene is identical on every render. */
 function stars(n: number, w: number, h: number, seed = 7) {
@@ -43,11 +44,12 @@ const Led = ({ x, y, on }: { x: number; y: number; on: boolean }) => (
 );
 
 export function BaseScene({ facilities: f, illumination, radiation, shift, highlight }: Props) {
+  const { t } = useI18n();
   const sunY = 300 - illumination * 60; // the Sun skims the polar horizon
   const panelGlow = Math.max(0.15, illumination);
   return (
     <svg className="scene" viewBox="0 0 1000 520" preserveAspectRatio="xMidYMid slice" role="img"
-      aria-label={`Lunar base at shift ${shift}. Illumination ${Math.round(illumination * 100)} percent.`}>
+      aria-label={t('scene.aria', { n: shift, pct: Math.round(illumination * 100) })}>
       <defs>
         <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#04070f" />
@@ -157,7 +159,7 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
         })}
         <rect x={110} y={400} width={190} height={6} rx={2} fill="#7d8796" />
         <rect x={106} y={242} width={198} height={110} rx={6} fill="none" stroke="#F4CA65" strokeOpacity={panelGlow * 0.6} filter="url(#soft)" className="panel-glow" />
-        <Label x={205} y={438} text={`Solar Array · ${Math.round(illumination * 100)}%`} on={illumination >= 0.5} />
+        <Label x={205} y={438} text={t('scene.solar', { pct: Math.round(illumination * 100) })} on={illumination >= 0.5} />
       </g>
 
       {/* Power cables: solar -> habitat always; habitat -> each facility, animated when it draws power */}
@@ -181,7 +183,7 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
         <path d="M364 380 H372" stroke="#8d97a6" strokeWidth="4" />
         {f.oxygen && <circle cx={366} cy={360} r={40} fill="#56C7F2" opacity="0.12" filter="url(#soft)" />}
         <Led x={347} y={334} on={f.oxygen} />
-        <Label x={366} y={438} text="Oxygen Recycling" on={f.oxygen} />
+        <Label x={366} y={438} text={t('scene.oxygen')} on={f.oxygen} />
       </g>
 
       {/* ---- Main habitat ---- */}
@@ -194,7 +196,7 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
         <rect x={430} y={376} width={130} height={4} fill="#56C7F2" opacity="0.6" />
         <rect x={488} y={286} width={3} height={22} fill="#9aa4b2" />
         <circle cx={489.5} cy={284} r={3} fill="#FF986A" className="blink" />
-        <Label x={495} y={438} text="Main Habitat" on />
+        <Label x={495} y={438} text={t('scene.habitat')} on />
       </g>
 
       {/* ---- Greenhouse ---- */}
@@ -211,7 +213,7 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
           </g>
         ))}
         <Led x={590} y={372} on={f.greenhouse} />
-        <Label x={632} y={438} text="Greenhouse" on={f.greenhouse} />
+        <Label x={632} y={438} text={t('scene.greenhouse')} on={f.greenhouse} />
       </g>
 
       {/* ---- Radiation shelter (regolith-covered) ---- */}
@@ -221,7 +223,7 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
         <path d="M730 404 Q770 340 810 404Z" fill="#6c717d" />
         <rect x={758} y={378} width={24} height={26} rx={3} fill={f.shelter ? '#F4CA65' : '#2a2f3a'} />
         <Led x={770} y={370} on={f.shelter} />
-        <Label x={770} y={438} text="Radiation Shelter" on={f.shelter} />
+        <Label x={770} y={438} text={t('scene.shelter')} on={f.shelter} />
       </g>
 
       {/* ---- Science laboratory ---- */}
@@ -234,7 +236,7 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
         <path d="M890 312 Q908 290 926 312Z" fill="#c9d0da" stroke="#8d97a6" />
         {f.lab && <circle cx={908} cy={300} r={18} fill="#56C7F2" opacity="0.18" className="blink" />}
         <Led x={862} y={392} on={f.lab} />
-        <Label x={898} y={438} text="Science Lab" on={f.lab} />
+        <Label x={898} y={438} text={t('scene.lab')} on={f.lab} />
       </g>
     </svg>
   );

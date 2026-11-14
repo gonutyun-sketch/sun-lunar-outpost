@@ -2,6 +2,8 @@ import { MISSION } from '../game/config';
 import { computeScore, totalSolarWithSiteFraction } from '../game/engine';
 import { missionSummary, missionTitle, takeaways } from '../game/debrief';
 import type { GameState, Resources } from '../game/types';
+import { LangToggle, useI18n } from '../i18n/I18n';
+import type { Key } from '../i18n/translate';
 
 /* ---------------- Animated background ---------------- */
 const BG_STARS = Array.from({ length: 140 }, (_, i) => {
@@ -43,75 +45,80 @@ export function Starfield() {
 
 /* ---------------- Main menu ---------------- */
 export function MainMenu({ onStart, onHow, onCredits }: { onStart: () => void; onHow: () => void; onCredits: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="screen menu">
-      <div className="kicker">NASA SPACE APPS CHALLENGE 2026 · JUNIOR ASTRONAUT MISSION TRAINER</div>
+      <LangToggle className="menu-lang" />
+      <div className="kicker">{t('menu.kicker')}</div>
       <h1><span className="sun">SUN</span>: Lunar Outpost</h1>
-      <p className="sub">
-        Command a three-person research base near the Moon’s South Pole. Balance power, oxygen, food and
-        radiation safety for eight shifts — and still get the science done.
-      </p>
+      {t('menu.titleSub') && <div className="title-sub">{t('menu.titleSub')}</div>}
+      <p className="sub">{t('menu.sub')}</p>
       <div className="menu-buttons">
-        <button className="btn btn-primary" onClick={onStart} autoFocus>START MISSION</button>
-        <button className="btn" onClick={onHow}>How to Play</button>
-        <button className="btn" onClick={onCredits}>Science &amp; Credits</button>
+        <button className="btn btn-primary" onClick={onStart} autoFocus>{t('menu.start')}</button>
+        <button className="btn" onClick={onHow}>{t('menu.how')}</button>
+        <button className="btn" onClick={onCredits}>{t('menu.credits')}</button>
       </div>
-      <div className="menu-foot">Team SUN · Educational game for ages 12–18 · 8–12 minutes</div>
+      <div className="menu-foot">{t('menu.foot')}</div>
     </div>
   );
 }
 
 /* ---------------- How to play ---------------- */
 export function HowToPlay({ onBack, onStart }: { onBack: () => void; onStart: () => void }) {
+  const { t, tr } = useI18n();
   const f = MISSION.facilities;
+  const minHealth = MISSION.failure.minHealth;
+  const research = MISSION.capacity.research;
   return (
     <div className="screen info-page">
       <header>
-        <h1>How to Play</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={onBack}>Back</button>
-          <button className="btn btn-primary" onClick={onStart}>Start Mission</button>
+        <h1>{t('how.title')}</h1>
+        <div className="header-actions">
+          <LangToggle />
+          <button className="btn" onClick={onBack}>{t('common.back')}</button>
+          <button className="btn btn-primary" onClick={onStart}>{t('common.startMission')}</button>
         </div>
       </header>
       <section className="panel">
-        <h2>YOUR GOAL</h2>
-        <p>Keep the crew of SUN-01 alive for <b>{MISSION.totalShifts} shifts</b> (12 hours each) and complete <b>{MISSION.capacity.research} research milestones</b>. Every system needs electricity — and there is never enough for everything.</p>
+        <h2>{t('how.goalH')}</h2>
+        <p>{tr('how.goal', { shifts: MISSION.totalShifts, research })}</p>
       </section>
       <section className="panel">
-        <h2>EACH SHIFT</h2>
+        <h2>{t('how.eachH')}</h2>
         <ol>
-          <li>Read the resources, the solar outlook and any space-weather warning.</li>
-          <li>Switch facilities ON or OFF. The power budget and projected changes update instantly.</li>
-          <li>Fix any power deficit (you cannot run more systems than your energy allows).</li>
-          <li>Press <b>ADVANCE SHIFT</b> and read the shift report explaining what changed.</li>
+          <li>{t('how.each1')}</li>
+          <li>{t('how.each2')}</li>
+          <li>{t('how.each3')}</li>
+          <li>{tr('how.each4', { btn: t('advance.btn').replace(' ▸', '') })}</li>
         </ol>
       </section>
       <section className="panel">
-        <h2>FACILITIES</h2>
+        <h2>{t('how.facH')}</h2>
         <table>
-          <thead><tr><th>System</th><th>Energy / shift</th><th>Effect</th></tr></thead>
+          <thead><tr><th>{t('how.thSystem')}</th><th>{t('how.thEnergy')}</th><th>{t('how.thEffect')}</th></tr></thead>
           <tbody>
-            <tr><td>Main Habitat (always on)</td><td>{MISSION.habitat.energyCost}</td><td>Keeps the base alive. If it cannot be powered, the mission fails.</td></tr>
-            <tr><td>Oxygen Recycling</td><td>{f.oxygen.energyCost}</td><td>+{f.oxygen.produces} oxygen. Crew always uses −{MISSION.crew.oxygenUse}.</td></tr>
-            <tr><td>Hydroponic Greenhouse</td><td>{f.greenhouse.energyCost}</td><td>+{f.greenhouse.produces} food. Crew always eats −{MISSION.crew.foodUse}.</td></tr>
-            <tr><td>Radiation Shelter</td><td>{f.shelter.energyCost}</td><td>Protects the crew during a radiation alert (otherwise −{MISSION.radiation.healthDamage} health).</td></tr>
-            <tr><td>Science Laboratory</td><td>{f.lab.energyCost}</td><td>+1 research milestone per shift (max {MISSION.capacity.research}).</td></tr>
+            <tr><td>{t('how.habitatRow')}</td><td>{MISSION.habitat.energyCost}</td><td>{t('how.eff.habitat')}</td></tr>
+            <tr><td>{t('fac.oxygen')}</td><td>{f.oxygen.energyCost}</td><td>{t('how.eff.oxygen', { prod: f.oxygen.produces, use: MISSION.crew.oxygenUse })}</td></tr>
+            <tr><td>{t('fac.greenhouse')}</td><td>{f.greenhouse.energyCost}</td><td>{t('how.eff.greenhouse', { prod: f.greenhouse.produces, use: MISSION.crew.foodUse })}</td></tr>
+            <tr><td>{t('fac.shelter')}</td><td>{f.shelter.energyCost}</td><td>{t('how.eff.shelter', { dmg: MISSION.radiation.healthDamage })}</td></tr>
+            <tr><td>{t('fac.lab')}</td><td>{f.lab.energyCost}</td><td>{t('how.eff.lab', { max: research })}</td></tr>
           </tbody>
         </table>
       </section>
       <section className="panel">
-        <h2>POWER</h2>
-        <p>Solar panels charge the battery (max {MISSION.capacity.energy}) at the start of each shift, then all running systems draw from it. Sunlight changes from shift to shift, so save energy before dark periods.</p>
-        <p>The base sits on a real ridge near Shackleton crater. NASA LRO/LOLA data show it is sunlit about {Math.round(MISSION.site.averageSunlitFraction * 100)}% of the time on average. Each shift multiplies that average by a fictional scenario modifier. See Science &amp; Credits.</p>
+        <h2>{t('how.powerH')}</h2>
+        <p>{t('how.power1', { cap: MISSION.capacity.energy })}</p>
+        <p>{t('how.power2', { pct: Math.round(MISSION.site.averageSunlitFraction * 100) })}</p>
       </section>
       <section className="panel">
-        <h2>WIN &amp; LOSE</h2>
+        <h2>{t('how.winH')}</h2>
         <ul>
-          <li><b>Full success:</b> survive all shifts, crew health ≥ {MISSION.failure.minHealth}, oxygen and food above zero, {MISSION.capacity.research} research milestones.</li>
-          <li><b>Incomplete:</b> the crew survives but research is unfinished.</li>
-          <li><b>Failure:</b> oxygen or food reaches zero, crew health falls below {MISSION.failure.minHealth}, or the habitat loses power.</li>
+          <li>{tr('how.win', { minHealth, research })}</li>
+          <li>{tr('how.partial')}</li>
+          <li>{tr('how.fail', { minHealth })}</li>
         </ul>
-        <p>Score (max 100): survival 40 · research 30 · crew safety 20 · remaining energy 10.</p>
+        <p>{t('how.score')}</p>
+        <p>{t('how.grades')}</p>
       </section>
     </div>
   );
@@ -119,122 +126,117 @@ export function HowToPlay({ onBack, onStart }: { onBack: () => void; onStart: ()
 
 /* ---------------- Science & credits ---------------- */
 export function Credits({ onBack }: { onBack: () => void }) {
+  const { t, tr } = useI18n();
   const site = MISSION.site;
   const siteSolar = {
     site: totalSolarWithSiteFraction(MISSION, site.averageSunlitFraction),
     alt: totalSolarWithSiteFraction(MISSION, site.nearbyComparisons[0].value),
   };
+  const mods = MISSION.shifts.map((s) => s.scenarioModifier);
+  const pct1 = (site.averageSunlitFraction * 100).toFixed(1);
+  const bars = [
+    { label: t('cr.ridgePixel'), value: site.averageSunlitFraction },
+    { label: t('site.cmp0'), value: site.nearbyComparisons[0].value },
+    { label: t('site.cmp1'), value: site.nearbyComparisons[1].value },
+  ];
   return (
     <div className="screen info-page">
       <header>
-        <h1>Science &amp; Credits</h1>
-        <button className="btn" onClick={onBack}>Back</button>
+        <h1>{t('cr.title')}</h1>
+        <div className="header-actions">
+          <LangToggle />
+          <button className="btn" onClick={onBack}>{t('common.back')}</button>
+        </div>
       </header>
       <section className="panel">
-        <h2>WHERE IS SUN-01?</h2>
+        <h2>{t('cr.whereH')}</h2>
+        <p>{tr('cr.where', { name: t('site.name'), lat: Math.abs(site.latitude).toFixed(4), lon: Math.abs(site.longitude).toFixed(4), note: t('site.longNote') })}</p>
         <p>
-          SUN-01 is a fictional base placed at a real location: <b>{site.name}</b>, at{' '}
-          <b>{Math.abs(site.latitude).toFixed(4)}°S, {Math.abs(site.longitude).toFixed(4)}°W</b> ({site.longitudeNote}).
+          <span className="badge-data measured">{t('cr.nasaBadge')}</span>{' '}
+          {tr('cr.value', { pct: pct1, v: site.averageSunlitFraction })}
         </p>
-        <p>
-          <span className="badge-data measured">NASA LRO/LOLA-DERIVED</span>{' '}
-          Over an 18.6-year lunar cycle, this spot is sunlit <b>{(site.averageSunlitFraction * 100).toFixed(1)}%</b> of the time
-          (value {site.averageSunlitFraction}, from the NASA illumination map). It has the highest value in that map
-          of the region from 85°S to the pole.
-        </p>
-        <div className="clarify">
-          <b>What 88.4% means, and what it does not.</b> It is the long-term share of time the Sun is visible from
-          this spot. It counts any time some part of the Sun’s disc shows above the terrain. It is <b>not</b> solar-panel
-          efficiency, <b>not</b> the share of full power received, and <b>not</b> a forecast for any real day.
-        </div>
+        <div className="clarify">{tr('cr.clarify', { pct: pct1 })}</div>
       </section>
       <section className="panel">
-        <h2>WHY THE SITE MATTERS</h2>
-        <div className="site-bars" role="img" aria-label="Average time sunlit: site pixel, 300 metre area, Shackleton crater floor">
-          {[{ label: 'SUN-01 ridge pixel (60 m)', value: site.averageSunlitFraction }, ...site.nearbyComparisons].map((c) => (
+        <h2>{t('cr.whyH')}</h2>
+        <div className="site-bars" role="img" aria-label={t('cr.barsAria')}>
+          {bars.map((c) => (
             <div className="site-bar" key={c.label}>
               <span className="lbl">{c.label}</span>
               <span className="track"><i style={{ width: `${c.value * 100}%` }} /></span>
-              <span className="pct">{(c.value * 100).toFixed(1)}%{c.value === 0 ? ' · permanent shadow' : ''}</span>
+              <span className="pct">{(c.value * 100).toFixed(1)}%{c.value === 0 ? t('cr.shadow') : ''}</span>
             </div>
           ))}
         </div>
         <p>
-          All three values come from the same NASA map. Averaged over just a 300 m × 300 m patch around the ridge crest,
-          sunlight falls from 88% to 55%, and the nearby crater floor never sees the Sun at all. In this game, running the same
-          8-shift scenario with the 300 m average instead of the ridge value would give <b>{siteSolar.alt}</b> energy
-          instead of <b>{siteSolar.site}</b>. That is {Math.round((1 - siteSolar.alt / siteSolar.site) * 100)}% less
-          power for the same base. <span className="badge-data game">GAME CALCULATION</span>
+          {tr('cr.why1', { alt: siteSolar.alt, site: siteSolar.site, pct: Math.round((1 - siteSolar.alt / siteSolar.site) * 100) })}{' '}
+          <span className="badge-data game">{t('cr.gameCalc')}</span>
         </p>
+        <p>{t('cr.why2')}</p>
+      </section>
+      <section className="panel">
+        <h2>{t('cr.howH')}</h2>
+        <p className="formula">{t('cr.formula1', { v: site.averageSunlitFraction })}<br />{t('cr.formula2')}</p>
         <p>
-          That is why NASA uses LOLA terrain models to choose landing and base sites at the South Pole. Sunlit ridges can
-          power a base, and shadowed crater floors nearby may hold water ice.
+          <span className="badge-data game">{t('cr.scenarioBadge')}</span>{' '}
+          {tr('cr.scenario', {
+            min: Math.min(...mods).toFixed(2),
+            max: Math.max(...mods).toFixed(2),
+            avg: Math.round((mods.reduce((a, m) => a + m, 0) / mods.length) * site.averageSunlitFraction * 100),
+            site: Math.round(site.averageSunlitFraction * 100),
+          })}
         </p>
       </section>
       <section className="panel">
-        <h2>HOW THE GAME USES THE DATA</h2>
-        <p className="formula">sunlight(shift) = min(1, NASA site average {site.averageSunlitFraction} × scenario modifier)<br />solar energy = round(30 × sunlight)</p>
-        <p>
-          <span className="badge-data game">GAMEPLAY SCENARIO</span>{' '}
-          The per-shift modifiers ({Math.min(...MISSION.shifts.map((s) => s.scenarioModifier)).toFixed(2)}–
-          {Math.max(...MISSION.shifts.map((s) => s.scenarioModifier)).toFixed(2)}), the radiation events, facility
-          costs and all resource units are <b>fictional training values</b>. They are not NASA observations or
-          forecasts for any real date. The scenario is a darker-than-average stretch: average sunlight across the 8
-          shifts is about {Math.round((MISSION.shifts.reduce((a, s) => a + s.scenarioModifier, 0) / MISSION.shifts.length) * site.averageSunlitFraction * 100)}%,
-          compared with the site’s long-term {Math.round(site.averageSunlitFraction * 100)}%.
-        </p>
-      </section>
-      <section className="panel">
-        <h2>DATASET, UNITS &amp; METHOD</h2>
+        <h2>{t('cr.dataH')}</h2>
         <ul className="src-list">
-          <li><b>Product:</b> {site.source.product}</li>
-          <li><b>Producer:</b> {site.source.provider}</li>
-          <li><b>Units:</b> {site.units}</li>
-          <li><b>Extraction:</b> {site.extraction}</li>
-          <li><b>Extracted:</b> {site.extractedOn}. The script is in the repository at tools/extract-illumination.mjs.</li>
+          <li><b>{t('cr.product')}</b> {t('site.product')}</li>
+          <li><b>{t('cr.producer')}</b> {t('site.provider')}</li>
+          <li><b>{t('cr.units')}</b> {t('site.units')}</li>
+          <li><b>{t('cr.extraction')}</b> {t('site.extraction')}</li>
+          <li><b>{t('cr.extracted')}</b> {t('cr.extractedNote', { date: site.extractedOn })}</li>
         </ul>
-        <h2 style={{ marginTop: 14 }}>LIMITATIONS</h2>
-        <ul className="src-list">{site.limitations.map((l) => <li key={l}>{l}</li>)}</ul>
+        <h2 style={{ marginTop: 14 }}>{t('cr.limitsH')}</h2>
+        <ul className="src-list">
+          {(['site.lim0', 'site.lim1', 'site.lim2', 'site.lim3'] as Key[]).map((k) => <li key={k}>{t(k)}</li>)}
+        </ul>
       </section>
       <section className="panel">
-        <h2>SOURCES</h2>
+        <h2>{t('cr.sourcesH')}</h2>
         <ul className="src-list">
           <li>{site.source.citation}</li>
-          <li>NASA GSFC PGDA, “Lunar Polar Illumination”: <a href={site.source.productPage} target="_blank" rel="noreferrer">{site.source.productPage}</a></li>
-          <li>Data file: <a href={site.source.dataUrl} target="_blank" rel="noreferrer">{site.source.dataUrl}</a> (label: <a href={site.source.labelUrl} target="_blank" rel="noreferrer">.LBL</a>)</li>
-          <li>Projection equations: <a href={site.source.projectionReference} target="_blank" rel="noreferrer">LOLA PDS DSMAP_POLAR.CAT</a></li>
-          <li>{site.source.visualization}. This is a visual reference for how sunlight changes over time; no numbers were taken from it.</li>
+          <li>{t('cr.pgda')} <a href={site.source.productPage} target="_blank" rel="noreferrer">{site.source.productPage}</a></li>
+          <li>{t('cr.dataFile')} <a href={site.source.dataUrl} target="_blank" rel="noreferrer">{site.source.dataUrl}</a> ({t('cr.label')} <a href={site.source.labelUrl} target="_blank" rel="noreferrer">.LBL</a>)</li>
+          <li>{t('cr.projection')} <a href={site.source.projectionReference} target="_blank" rel="noreferrer">LOLA PDS DSMAP_POLAR.CAT</a></li>
+          <li>{site.source.visualization}. {t('cr.svsNote')}</li>
         </ul>
       </section>
       <section className="panel">
-        <h2>TEAM</h2>
-        <p>Team SUN — NASA Space Apps Challenge 2026, “Build a Junior Astronaut Mission Trainer”.</p>
+        <h2>{t('cr.teamH')}</h2>
+        <p>{t('cr.team')}</p>
       </section>
       <section className="panel">
-        <h2>AI TOOL DISCLOSURE</h2>
-        <p>
-          Source code, the vector lunar-base illustrations, and educational text were drafted with the help of
-          Claude Code (Anthropic) and reviewed by the team. No AI service is used while the game runs.
-          See AI_USAGE.md in the repository for details.
-        </p>
+        <h2>{t('cr.aiH')}</h2>
+        <p>{t('cr.ai')}</p>
       </section>
       <section className="panel">
-        <h2>TECHNOLOGY</h2>
-        <p>React, TypeScript and Vite. Fonts: Orbitron and Inter (SIL Open Font License, via Google Fonts).</p>
+        <h2>{t('cr.techH')}</h2>
+        <p>{t('cr.tech')}</p>
       </section>
     </div>
   );
 }
 
 /* ---------------- Results ---------------- */
-const SERIES: { k: keyof Resources; label: string; color: string }[] = [
-  { k: 'energy', label: 'Battery', color: '#F4CA65' },
-  { k: 'oxygen', label: 'Oxygen', color: '#56C7F2' },
-  { k: 'food', label: 'Food', color: '#6CE0B2' },
-  { k: 'health', label: 'Crew health', color: '#ff8fa0' },
+const SERIES: { k: keyof Resources; color: string }[] = [
+  { k: 'energy', color: '#F4CA65' },
+  { k: 'oxygen', color: '#56C7F2' },
+  { k: 'food', color: '#6CE0B2' },
+  { k: 'health', color: '#ff8fa0' },
 ];
 
 function HistoryGraph({ state }: { state: GameState }) {
+  const { t } = useI18n();
   const points: Resources[] = [MISSION.initial, ...state.history.map((h) => h.after)];
   const W = 600, H = 240, L = 34, R = 10, T = 10, B = 28;
   const n = MISSION.totalShifts;
@@ -242,7 +244,7 @@ function HistoryGraph({ state }: { state: GameState }) {
   const y = (v: number) => T + (1 - v / 100) * (H - T - B);
   return (
     <>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Resource history by shift">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('results.graphAria')}>
         {[0, 25, 50, 75, 100].map((v) => (
           <g key={v}>
             <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="rgba(86,199,242,0.12)" />
@@ -250,7 +252,7 @@ function HistoryGraph({ state }: { state: GameState }) {
           </g>
         ))}
         {Array.from({ length: n + 1 }, (_, i) => (
-          <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="#8ea3bd">{i === 0 ? 'Start' : `S${i}`}</text>
+          <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="#8ea3bd">{i === 0 ? t('results.start') : t('results.s', { n: i })}</text>
         ))}
         {MISSION.shifts.filter((s) => s.event === 'radiation').map((s) => {
           const h = state.history.find((r) => r.shift === s.shift);
@@ -259,7 +261,7 @@ function HistoryGraph({ state }: { state: GameState }) {
             <g key={s.shift}>
               <rect x={x(s.shift - 1)} y={T} width={x(s.shift) - x(s.shift - 1)} height={H - T - B} fill={col} opacity="0.08" />
               <text x={(x(s.shift - 1) + x(s.shift)) / 2} y={T + 12} textAnchor="middle" fontSize="10" fill={col}>
-                ☢ {!h ? '' : h.radiation === 'exposed' ? 'exposed' : 'sheltered'}
+                ☢ {!h ? '' : t(h.radiation === 'exposed' ? 'results.exposed' : 'results.sheltered')}
               </text>
             </g>
           );
@@ -273,25 +275,27 @@ function HistoryGraph({ state }: { state: GameState }) {
         ))}
       </svg>
       <div className="legend">
-        {SERIES.map((s) => <span key={s.k}><i style={{ background: s.color }} />{s.label}</span>)}
-        <span><i style={{ background: '#ff8fa0', opacity: 0.5 }} />Health safety limit ({MISSION.failure.minHealth})</span>
+        {SERIES.map((s) => <span key={s.k}><i style={{ background: s.color }} />{t(`res.${s.k}` as Key)}</span>)}
+        <span><i style={{ background: '#ff8fa0', opacity: 0.5 }} />{t('results.limit', { v: MISSION.failure.minHealth })}</span>
       </div>
     </>
   );
 }
 
 export function Results({ state, onRestart, onMenu }: { state: GameState; onRestart: () => void; onMenu: () => void }) {
+  const { t } = useI18n();
   const score = computeScore(state, MISSION);
-  const lessons = takeaways(state, MISSION);
+  const lessons = takeaways(state, MISSION, t);
   return (
     <div className="screen results">
+      <div className="results-lang"><LangToggle /></div>
       <section className={`results-hero panel ${state.status}`}>
         <div>
-          <span className="tag">Mission debrief · SUN-01</span>
-          <h1>{missionTitle(state)}</h1>
-          <p>{missionSummary(state, MISSION)}</p>
+          <span className="tag">{t('results.tag')}</span>
+          <h1>{missionTitle(state, t)}</h1>
+          <p>{missionSummary(state, MISSION, t)}</p>
         </div>
-        <div className="grade grade-ring" aria-label={`Grade ${score.grade}, ${score.total} of 100 points`}>
+        <div className="grade grade-ring" aria-label={t('results.gradeAria', { g: score.grade, n: score.total })}>
           <svg viewBox="0 0 120 120" aria-hidden>
             <circle cx="60" cy="60" r="52" fill="none" stroke="#1d2b40" strokeWidth="9" />
             <circle className="ring-fg" cx="60" cy="60" r="52" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round"
@@ -305,32 +309,33 @@ export function Results({ state, onRestart, onMenu }: { state: GameState; onRest
       </section>
       <div className="results-grid">
         <section className="score-card panel">
-          <h2>SCORE</h2>
+          <h2>{t('results.scoreH')}</h2>
           {([
-            ['Mission survival', score.survival, 40],
-            [`Research (${state.resources.research}/${MISSION.capacity.research})`, score.research, 30],
-            [`Crew safety (health ${state.resources.health})`, score.safety, 20],
-            [`Energy reserve (${state.resources.energy})`, score.energy, 10],
+            [t('results.survival'), score.survival, 40],
+            [t('results.research', { r: state.resources.research, max: MISSION.capacity.research }), score.research, 30],
+            [t('results.safety', { h: state.resources.health }), score.safety, 20],
+            [t('results.energy', { e: state.resources.energy }), score.energy, 10],
           ] as [string, number, number][]).map(([label, v, max]) => (
             <div className="score-row" key={max}>
               <span>{label}</span><span className="v">{v} / {max}</span>
               <span className="mini" aria-hidden><i style={{ width: `${(v / max) * 100}%` }} /></span>
             </div>
           ))}
-          <div className="score-row total"><span>Total</span><span className="v">{score.total}</span></div>
+          <div className="score-row total"><span>{t('results.total')}</span><span className="v">{score.total}</span></div>
+          <div className="grade-scale">{t('results.gradeScale')}</div>
         </section>
         <section className="graph-card panel">
-          <h2>RESOURCE HISTORY</h2>
+          <h2>{t('results.graphH')}</h2>
           <HistoryGraph state={state} />
         </section>
       </div>
       <section className="takeaways panel">
-        <h2>WHAT THIS MISSION TEACHES</h2>
+        <h2>{t('results.teachH')}</h2>
         <ol>{lessons.map((l, i) => <li key={i}>{l}</li>)}</ol>
       </section>
       <div className="results-actions">
-        <button className="btn btn-primary" onClick={onRestart} autoFocus>RESTART MISSION</button>
-        <button className="btn" onClick={onMenu}>Main Menu</button>
+        <button className="btn btn-primary" onClick={onRestart} autoFocus>{t('results.restart')}</button>
+        <button className="btn" onClick={onMenu}>{t('results.menu')}</button>
       </div>
     </div>
   );
