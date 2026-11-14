@@ -1,0 +1,30 @@
+{
+  "missionName": "SUN-01 Lunar Research Outpost",
+  "totalShifts": 8,
+  "initial": { "energy": 55, "oxygen": 65, "food": 70, "health": 100, "research": 0 },
+  "capacity": { "energy": 100, "oxygen": 100, "food": 100, "health": 100, "research": 3 },
+  "solar": {
+    "basePeakOutput": 30,
+    "note": "Solar generation = round(basePeakOutput x shift illumination modifier). Shift modifiers are provisional gameplay coefficients, NOT measured NASA illumination values."
+  },
+  "habitat": { "energyCost": 12 },
+  "crew": { "oxygenUse": 14, "foodUse": 12 },
+  "facilities": {
+    "oxygen": { "energyCost": 7, "produces": 20 },
+    "greenhouse": { "energyCost": 6, "produces": 16 },
+    "shelter": { "energyCost": 7 },
+    "lab": { "energyCost": 8 }
+  },
+  "radiation": { "healthDamage": 35 },
+  "failure": { "minHealth": 40 },
+  "shifts": [
+    { "shift": 1, "illumination": 0.9 },
+    { "shift": 2, "illumination": 0.8 },
+    { "shift": 3, "illumination": 0.55, "event": "warning" },
+    { "shift": 4, "illumination": 0.25, "event": "radiation" },
+    { "shift": 5, "illumination": 0.35 },
+    { "shift": 6, "illumination": 0.65, "event": "warning" },
+    { "shift": 7, "illumination": 0.95, "event": "radiation" },
+    { "shift": 8, "illumination": 0.6 }
+  ]
+}
