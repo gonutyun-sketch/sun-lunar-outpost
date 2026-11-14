@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MISSION } from '../game/config';
 import {
   activeExpeditions,
@@ -37,6 +37,7 @@ import {
 import { LangToggle, useI18n } from '../i18n/I18n';
 import type { Key, Params, T } from '../i18n/translate';
 import { BaseScene } from './BaseScene';
+import { useWarningQueue, WarningBanner, type MissionWarning } from './WarningBanner';
 
 interface Props {
   state: GameState;
@@ -47,6 +48,7 @@ interface Props {
   onExplore: (id: string) => void;
   fx: boolean;
   onToggleFx: () => void;
+  seenWarnings: Set<string>;
 }
 
 const COLORS: Record<keyof Resources, string> = {
@@ -68,6 +70,13 @@ function Icon({ k }: { k: keyof Resources }) {
     research: <path d="M6 2.5 H10 M7 2.5 V7 L3 13 H13 L9 7 V2.5" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" />,
   };
   return <svg className="ico" viewBox="0 0 16 16" width="14" height="14" aria-hidden>{paths[k]}</svg>;
+}
+
+function RoverIcon() {
+  return <svg className="rover-icon" width="20" height="16" viewBox="0 0 20 16" shapeRendering="crispEdges" aria-hidden>
+    <path d="M4 7h12v1h2v4H2V9h2zM10 4h4v3h-4zM12 2h1v2h-1zM2 13h4v2H2zm6 0h4v2H8zm6 0h4v2h-4z" fill="currentColor" />
+    <path d="M5 8h4v2H5zm9 0h2v2h-2z" fill="#172033" />
+  </svg>;
 }
 
 function Delta({ v }: { v: number }) {
@@ -204,11 +213,12 @@ function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState
   );
 }
 
-export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx, onToggleFx }: Props) {
+export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx, onToggleFx, seenWarnings }: Props) {
   const { t } = useI18n();
   const [report, setReport] = useState<ShiftReport | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   const [roverMenu, setRoverMenu] = useState(false);
+  const { warning, add: warn } = useWarningQueue();
 
   const outcome = useMemo(() => projectCurrentShift(state, MISSION), [state]);
   const warnings = useMemo(() => getWarnings(state, MISSION, outcome), [state, outcome]);
@@ -227,6 +237,41 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
   const damagePct = Math.round(solarDamageMult(state, MISSION) * 100);
   const o2DamagePct = Math.round(oxygenDamageMult(state, MISSION) * 100);
   const leak = oxygenLeak(state, MISSION);
+  const powerDeficit = outcome.habitatPowerFailure || outcome.optionalDeficit > 0;
+  const solarFaultStarted = outcome.solarDamaged && MISSION.expeditions.some(e => e.id === 'solarRepair' && e.fromShift === state.shift);
+  const oxygenFaultStarted = outcome.oxygenDamaged && MISSION.expeditions.some(e => e.id === 'oxygenRepair' && e.fromShift === state.shift);
+  useEffect(() => {
+    if (ended) return;
+    const next: MissionWarning[] = [];
+    if (event) {
+      next.push({ id: `emergency-${state.shift}`, tone: event.radiation ? 'critical' : 'caution',
+        title: `ev.${event.id}.title` as Key, action: 'notice.emergency.action' });
+    }
+    if (powerDeficit) {
+      next.push({ id: `power-${state.shift}`, tone: 'critical', title: 'notice.power.title',
+        action: outcome.habitatPowerFailure ? 'notice.habitat.action' : 'notice.power.action' });
+    }
+    if (solarFaultStarted) next.push({ id: 'solar-fault', tone: 'caution', title: 'notice.solar.title', action: 'notice.solar.action' });
+    if (oxygenFaultStarted) next.push({ id: 'oxygen-fault', tone: 'caution', title: 'notice.oxygen.title', action: 'notice.oxygen.action' });
+    const unseen = next.filter(({ id }) => !seenWarnings.has(id));
+    for (const { id } of unseen) seenWarnings.add(id);
+    warn(...unseen);
+  }, [ended, event, state.shift, powerDeficit, outcome.habitatPowerFailure, solarFaultStarted, oxygenFaultStarted, seenWarnings, warn]);
+  const scene = useMemo(() => ({
+    facilities: outcome.ran,
+    sunlight: outcome.illumination,
+    radiation: !!event?.radiation && !ended,
+    dust: event?.id === 'dust' && state.choice !== 'eva',
+    solarFault: outcome.solarDamaged,
+    oxygenFault: outcome.oxygenDamaged || (event?.id === 'o2fault' && state.choice !== 'repair'),
+    pumpFault: event?.id === 'pump' && state.choice !== 'replace',
+    powerAlert: outcome.habitatPowerFailure || outcome.optionalDeficit > 0 || outcome.after.energy < MISSION.habitat.energyCost,
+    habitatOffline: outcome.habitatPowerFailure,
+    battery: Math.min(1, r.energy / capacity),
+    upgrades: state.upgrades,
+    building: state.build,
+    fresh: lastBuilt,
+  }), [outcome, event, ended, state.choice, state.upgrades, state.build, lastBuilt, r.energy, capacity]);
   const facFocus = focus && FACILITY_IDS.includes(focus as FacilityId) ? (focus as FacilityId) : null;
   // Science briefing: hovered facility/upgrade > current emergency > shift card.
   const eduKey = focus ? `edu.${focus}` : event ? `edu.ev.${event.id}` : `edu.${state.shift}`;
@@ -244,12 +289,13 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
 
   return (
     <div className={`mission screen ${fx ? '' : 'no-fx'} ${event?.radiation && !ended ? 'rad-alert' : ''}`}>
+      <WarningBanner warning={warning} />
       {/* ---------- Top bar ---------- */}
       <header className="topbar panel">
         <div className="brand">
           <h1>SUN-01</h1>
           <span className="shift">{t('mission.shift', { n: state.shift, total: MISSION.totalShifts })}</span>
-          <span className="chapter-tag">{t('chapter.label', { n: chapter })} · {t(`chapter.${chapter}.title` as Key)}</span>
+          <span className="chapter-tag" title={t(`chapter.${chapter}.goal` as Key)}>{t('chapter.label', { n: chapter })} · {t(`chapter.${chapter}.title` as Key)}</span>
           <div className="shift-pips" aria-hidden>
             {MISSION.shifts.map((s) => (
               <span key={s.shift}
@@ -289,9 +335,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
       {/* ---------- Center ---------- */}
       <div className="mission-main">
         <div className="scene-wrap panel">
-          <BaseScene key={`scene-${state.shift}`} facilities={outcome.ran} illumination={outcome.illumination}
-            radiation={!!event?.radiation} shift={state.shift} highlight={facFocus} upgrades={state.upgrades}
-            building={state.build} fresh={lastBuilt} battery={Math.min(1, r.energy / capacity)} dust={event?.id === 'dust' && state.choice !== 'eva'} damaged={damagePct < 100} o2Damaged={o2DamagePct < 100} />
+          <BaseScene state={scene} shift={state.shift} highlight={facFocus} fx={fx} />
           {!ended && (
             <div className={`shift-banner ${chapterStart ? 'chapter' : ''}`} key={`banner-${state.shift}`} aria-hidden>
               {chapterStart ? (
@@ -307,9 +351,6 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
                 </>
               )}
             </div>
-          )}
-          {event && !ended && (
-            <EventCard state={state} ev={event} onChoose={(id) => setState(chooseOption(state, MISSION, id))} />
           )}
           {forecast && !ended && (
             <div className={`event-strip ${forecast.radiation ? 'radiation-fc' : 'warning'}`} role="status">
@@ -337,6 +378,9 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
 
         <aside className="controls panel" aria-label={t('controls.aria')}>
           <h2>{t('controls.title')}</h2>
+          {event && !ended && (
+            <EventCard state={state} ev={event} onChoose={(id) => setState(chooseOption(state, MISSION, id))} />
+          )}
 
           <div className="fac on locked slim">
             <div className="title"><span className="led" />{facName('habitat')}<span className="state on">{t('controls.alwaysOn')}</span></div>
@@ -366,7 +410,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
                   aria-label={t('switch.aria', { name, state: t(on ? 'switch.on' : 'switch.off') })}
                   title={lockedByEvent || forcedOn ? t('switch.tipLocked') : !on && !available ? t('switch.tipDone') : t(on ? 'switch.tipOn' : 'switch.tipOff', { name })}
                   disabled={ended || lockedByEvent || forcedOn || (!on && !available)}
-                  onClick={() => setState(toggleFacility(state, MISSION, id))}
+                  onClick={() => { setFocus(id); setState(toggleFacility(state, MISSION, id)); }}
                 />
                 <div className="meta"><span className="cost">{t('controls.cost', { n: facilityCost(MISSION, id, state.upgrades) })}</span><span className="gain">{gain}</span></div>
               </div>
@@ -441,7 +485,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
                   {expeditions.map((x) => (
                     <button key={x.id} role="menuitem" className="btn btn-rover" onClick={() => { setRoverMenu(false); onExplore(x.id); }}
                       title={t(x.id === 'oxygenRepair' ? 'ex.o2.launchTip' : x.id === 'sampleSurvey' ? 'ex.sc.launchTip' : 'ex.launchTip')}>
-                      🚙 {t(`ex.short.${x.id}` as Key)}
+                      <RoverIcon /> {t(`ex.short.${x.id}` as Key)}
                     </button>
                   ))}
                 </div>
@@ -449,7 +493,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
               <button className="btn btn-rover" aria-expanded={expeditions.length > 1 ? roverMenu : undefined}
                 title={expeditions.length === 1 ? t(expeditions[0].id === 'oxygenRepair' ? 'ex.o2.launchTip' : expeditions[0].id === 'sampleSurvey' ? 'ex.sc.launchTip' : 'ex.launchTip') : undefined}
                 onClick={() => (expeditions.length === 1 ? onExplore(expeditions[0].id) : setRoverMenu((v) => !v))}>
-                🚙 {expeditions.length === 1 ? t(`ex.short.${expeditions[0].id}` as Key) : `${t('ex.launch')} (${expeditions.length})`}
+                <RoverIcon /> {expeditions.length === 1 ? t(`ex.short.${expeditions[0].id}` as Key) : `${t('ex.launch')} (${expeditions.length})`}
               </button>
             </div>
           )}

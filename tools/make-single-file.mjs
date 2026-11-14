@@ -11,7 +11,9 @@ const out = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[
 const fragment = process.argv.includes('--fragment');
 const files = fs.readdirSync('dist/assets');
 const js = fs.readFileSync(`dist/assets/${files.find((f) => f.endsWith('.js'))}`, 'utf8').replace(/<\/script/gi, '<\\/script');
-const css = fs.readFileSync(`dist/assets/${files.find((f) => f.endsWith('.css'))}`, 'utf8');
+// Standalone builds use the declared system font fallbacks without requesting web fonts.
+const webFonts = /@import\s*(?:url\(\s*)?(['"])https:\/\/fonts\.googleapis\.com\/css2?\?[^'"]+\1\s*\)?\s*;/g;
+const css = fs.readFileSync(`dist/assets/${files.find((f) => f.endsWith('.css'))}`, 'utf8').replace(webFonts, '');
 let html = fs.readFileSync('dist/index.html', 'utf8');
 
 // Function replacers: the bundle contains `$&`/`$'` sequences that string replacers would expand.

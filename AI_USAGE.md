@@ -2,12 +2,14 @@
 
 ## Tools
 - **Claude Code (Anthropic, Claude Opus 5.5)** — development assistant.
+- **Codex (OpenAI)** — pixel art and interface implementation and browser verification.
 
 ## Scope of AI assistance
 - Project scaffolding (React + TypeScript + Vite configuration).
 - Simulation engine and unit tests, implemented from the team's Game Design Document v1.0.
 - UI components and CSS.
 - Vector (SVG) illustrations of the lunar base, starfield and Moon — **AI-generated code-drawn artwork**, original, no external image assets.
+- Original code-drawn pixel artwork for the outpost, rover, terrain and mission equipment, plus the updated menu, base and rover interfaces. The raster art is generated locally by the game from its source code.
 - Phase 5 visual polish (CSS/SVG effects), strategy & balance analysis tests, README and GitHub Pages workflow.
 - Gameplay screenshots in docs/screenshots/ are captures of the actual game (not generated images).
 - Korean/English localisation system and the Korean translation of all UI and educational text (to be reviewed by Korean-speaking team members).
