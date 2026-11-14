@@ -31,6 +31,8 @@ export interface FrameInfo {
   inShadow: boolean;
   shake: number;
   particles: Particle[];
+  /** World→screen zoom (1 = 1:1). Smaller screens zoom out; world coordinates never change. */
+  zoom?: number;
   labels: { shadow: string; deep: string; dock: string; charger: string; solarB: string; base: string; oxygen: string; samples: string; depot: string };
 }
 
@@ -128,11 +130,14 @@ function label(g: CanvasRenderingContext2D, text: string, x: number, y: number, 
 }
 
 export function drawFrame(g: CanvasRenderingContext2D, vw: number, vh: number, m: WorldMap, r: Rover, f: FrameInfo) {
-  // camera follows the rover, clamped to the map
-  const camX = Math.max(0, Math.min(m.w - vw, r.x - vw / 2)) + (f.shake ? (Math.random() - 0.5) * f.shake : 0);
-  const camY = Math.max(0, Math.min(m.h - vh, r.y - vh / 2)) + (f.shake ? (Math.random() - 0.5) * f.shake : 0);
+  // camera follows the rover, clamped to the map; ww×wh = visible world area at this zoom
+  const zoom = f.zoom ?? 1;
+  const ww = vw / zoom, wh = vh / zoom;
+  const camX = Math.max(0, Math.min(m.w - ww, r.x - ww / 2)) + (f.shake ? (Math.random() - 0.5) * f.shake : 0);
+  const camY = Math.max(0, Math.min(m.h - wh, r.y - wh / 2)) + (f.shake ? (Math.random() - 0.5) * f.shake : 0);
   g.save();
   g.clearRect(0, 0, vw, vh);
+  g.scale(zoom, zoom);
   g.translate(-camX, -camY);
   g.drawImage(terrain(m), 0, 0);
 
@@ -318,7 +323,7 @@ export function drawFrame(g: CanvasRenderingContext2D, vw: number, vh: number, m
   const goals = f.targets.filter((mk) => mk.state !== 'done');
   const target = goals.sort((a, b) => Math.hypot(a.x - r.x, a.y - r.y) - Math.hypot(b.x - r.x, b.y - r.y))[0];
   if (target) {
-    const sx = target.x - camX, sy = target.y - camY;
+    const sx = (target.x - camX) * zoom, sy = (target.y - camY) * zoom;
     if (sx < 0 || sy < 0 || sx > vw || sy > vh) {
       const ang = Math.atan2(sy - vh / 2, sx - vw / 2);
       const ax = vw / 2 + Math.cos(ang) * (vw / 2 - 36), ay = vh / 2 + Math.sin(ang) * (vh / 2 - 36);

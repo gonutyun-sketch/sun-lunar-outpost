@@ -12,6 +12,7 @@ _Last updated: 2026-11-14 (Phase 5)_
 | 8 | Rover exploration P0: drive, collide, battery, Mission 1 (solar repair) + circuit puzzle, linked to base | ✅ Done (awaiting play-test) |
 | 8b | Rover P1: Mission 2 — oxygen plant repair (parts, leak scan, pressure minigame) | ✅ Done (awaiting play-test) |
 | 8c | Rover P1: Mission 3 — science survey (3 samples, free order, deep-shadow risk, hold-E drilling) | ✅ Done (awaiting play-test) |
+| 9 | Cross-platform: responsive layouts, touch joystick/action button, touch minigames, canvas DPR/resize/zoom | ✅ Done (awaiting review; not yet tested on a physical device) |
 | 6 | Public deployment, final QA, submission | ⏳ Needs GitHub/hosting account action by the team |
 
 ## Phase 5 delivered
@@ -77,6 +78,13 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Balance: with the research goal of 4 the +1 milestone mainly saves a lab shift for a human; the simple bot shows no score change (it runs the lab whenever it can), so the goal was not raised.
 - Estimated hands-on time: Mission 1 ≈ 40–50 s, Mission 2 ≈ 1.5 min, Mission 3 ≈ 1–1.5 min at bot speed; a first-time human with retries ≈ 4–6 min total (target was 6–8; see Remaining).
 
+## Cross-platform & responsive (2026-11-14)
+- Touch (Pointer Events, per-pointer capture, multitouch): joystick bottom-left (analog, dead zone, normalised), context action button bottom-right (tap = E, hold = drilling with progress ring), ❚❚ pause, ✕ close on puzzles; shown only when relevant; touch UI on coarse pointers / touch points / first touch.
+- Safety: pointercancel / lost capture / blur / tab hidden release every input; hidden tab pauses the mission; long-press context menu blocked in the game; `touch-action: none` only on the game view and controls; menus scroll normally.
+- Canvas: CSS size vs backing store (DPR capped at 2), ResizeObserver, camera zoom 0.5–1 for small views (world coordinates/collisions unchanged), off-screen arrow in screen space.
+- Layout: <1100 px single-column base screen with fixed bottom action bar (Advance + rover launcher); <640 px phone layout (short resource names, chips under the scene, 3-col report deltas); compact exploration HUD in short landscape; 44 px targets on touch (`html.touch` + pointer: coarse); safe-area insets; dvh heights.
+- QA tools (dev only): `?devShift=N` start shift, `tools/qa-responsive.js` (overflow / cut / <44 px / overlap checks + synthetic touch), `tools/qa-sweep.js` (15 screens per viewport).
+
 ## Remaining (priority order)
 1. **P0** Create GitHub repo, push, enable Pages (steps in HANDOFF.md) → public demo URL, add to README.
 2. **P1** Team decision on difficulty (above). If changed: update mission.json + tests.
@@ -88,6 +96,8 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Control panel may still scroll slightly at 1366×768 when 2+ warnings are shown (all critical warnings are now above the fold).
 - Mid-transition screenshots can show the fading shift banner (cosmetic).
 
-## Last test results (2026-11-14, rover Mission 3)
-- `npm run typecheck` ✅ · `npm test` ✅ 58/58 · `npm run build` ✅
-- Browser 1366×768 (Korean, real key events; timer-frame shim injected for testing while the pane was hidden): Shift 8 → launcher "(3)" menu → Mission 3 briefing → S3 hold-E drill (1/3) → deep zone (HUD "❄", −3.25/s, red warning) → moving cancels drilling → S1 → S2 → dock → success (67 s, battery 50); base research 0/4 → 1/4, report "Rover — Science samples: success!", launcher "(2)". Failure: battery 0 in the deep zone → failure screen. Game played to the results screen; no console errors.
+## Last test results (2026-11-14, cross-platform)
+- `npm run typecheck` ✅ · `npm test` ✅ 61/61 · `npm run build` ✅ (dev hooks and devShift absent from bundle)
+- Viewport sweep (browser-pane emulation, 15 screens each: menu, how-to, credits, base+emergency, decision, rover menu, M1 briefing/driving/circuit/pause, M2 pressure, M3 briefing/sample, shift report, results): 320×568, 375×667, 390×844, 844×390, 768×1024, 1024×768, 1366×768, 1920×1080 — all OK (no horizontal scroll, nothing cut, no touch target <44 px on touch, no overlaps, Advance visible).
+- Touch-only play-tests (synthetic touch PointerEvents, no keyboard): M3 complete in 390×844 portrait (incl. multitouch: drilling cancelled by joystick; pointercancel releases); M1 started in portrait, rotated to 844×390 mid-drive (position/step kept, canvas 372×635 → 826×290), circuit solved by tapping 87 px tiles; M2 complete in landscape, pressure solved with ▲▼ buttons 13.3 s / 24 taps / 0 vents (keyboard: 13.0 s / 25 taps). PC keyboard regression: M1 complete at 1366×768, touch UI hidden.
+- NOT verified: real phones/tablets (iOS Safari, Android Chrome), real multi-finger hardware, iPhone notch/home indicator, real address-bar resizing; the browser pane was hidden so a timer-based frame shim was injected during tests.

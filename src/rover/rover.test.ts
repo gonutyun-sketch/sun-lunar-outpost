@@ -238,3 +238,42 @@ describe('mission 3: science survey terrain', () => {
     expect(risky.battery).toBeLessThan(safe.battery);
   });
 });
+
+import { cameraZoom, joystickVector, knobOffset, renderDpr } from './touch';
+
+describe('touch input helpers', () => {
+  it('joystick: dead zone, normalised magnitude, clamped at the rim', () => {
+    expect(joystickVector(5, 0, 60).mag).toBe(0); // inside dead zone
+    const full = joystickVector(200, 0, 60);
+    expect(full.mag).toBeCloseTo(1, 6);
+    expect(full.x).toBeCloseTo(1, 6);
+    const diag = joystickVector(100, 100, 60);
+    expect(Math.hypot(diag.x, diag.y)).toBeCloseTo(1, 6); // diagonals are not faster
+    const half = joystickVector(0, -30, 60);
+    expect(half.y).toBeLessThan(0);
+    expect(half.mag).toBeGreaterThan(0.3);
+    expect(half.mag).toBeLessThan(0.5);
+    expect(knobOffset(120, 0, 60)).toEqual({ x: 60, y: 0 });
+  });
+  it('analog stick drives the rover; partial tilt is slower; keys still take priority', () => {
+    let full = createRover(MAP), part = createRover(MAP);
+    for (let i = 0; i < 120; i++) {
+      full = stepRover(MAP, full, { ...NONE, ax: 1, ay: 0 }, 1 / 60).rover;
+      part = stepRover(MAP, part, { ...NONE, ax: 0.4, ay: 0 }, 1 / 60).rover;
+    }
+    expect(full.vx).toBeGreaterThan(part.vx);
+    expect(Math.hypot(full.vx, full.vy)).toBeLessThanOrEqual(ROVER.maxSpeed + 0.001);
+    const diag = stepRover(MAP, createRover(MAP), { ...NONE, ax: Math.SQRT1_2, ay: Math.SQRT1_2 }, 0.1).rover;
+    const straight = stepRover(MAP, createRover(MAP), { ...NONE, ax: 1, ay: 0 }, 0.1).rover;
+    expect(Math.hypot(diag.vx, diag.vy)).toBeCloseTo(Math.hypot(straight.vx, straight.vy), 3);
+    const keys = stepRover(MAP, createRover(MAP), { ...NONE, left: true, ax: 1, ay: 0 }, 0.1).rover;
+    expect(keys.vx).toBeLessThan(0); // keyboard wins over a resting thumb
+  });
+  it('camera zoom and DPR limits', () => {
+    expect(cameraZoom(1366, 600)).toBe(1);
+    expect(cameraZoom(390, 500)).toBe(0.5);
+    expect(cameraZoom(844, 300)).toBeCloseTo(300 / 520, 6);
+    expect(renderDpr(3)).toBe(2);
+    expect(renderDpr(0)).toBe(1);
+  });
+});

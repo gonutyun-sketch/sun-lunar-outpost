@@ -546,4 +546,15 @@ export const ko: Record<keyof typeof en, string> = {
   'ex.map.deep': "영구 그림자 (훈련용) · 히터 −3/s",
   'ex.zone.deep': "❄ 영구 그림자 — 히터 가동",
   'ex.warn.deep': "영구 그림자 구역: 히터 때문에 초당 −3씩 소모!",
+
+  // touch controls
+  'ex.touch.repair': "수리",
+  'ex.touch.load': "싣기",
+  'ex.touch.scan': "점검",
+  'ex.touch.drill': "길게: 시추",
+  'ex.touch.dock': "도킹",
+  'ex.touch.stick': "주행 조이스틱",
+  'ex.touch.controls': "터치: 왼쪽 조이스틱을 끌어 이동 · 오른쪽 버튼을 눌러 상호작용(시추는 길게) · ❚❚ 일시정지.",
+  'ex.touch.rotate': "팁: 가로 화면에서 지형이 더 넓게 보입니다 (세로도 플레이 가능).",
+  'ex.close': "닫기",
 };

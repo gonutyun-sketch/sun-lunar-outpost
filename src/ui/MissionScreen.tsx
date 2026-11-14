@@ -77,14 +77,14 @@ function Delta({ v }: { v: number }) {
 
 const signed = (v: number) => (v >= 0 ? `+${v}` : `${v}`);
 
-function Stat({ name, tip, k, value, next, warnAt, critAt, max = 100 }: {
-  name: string; tip: string; k: keyof Resources; value: number; next: number; warnAt: number; critAt: number; max?: number;
+function Stat({ name, short, tip, k, value, next, warnAt, critAt, max = 100 }: {
+  name: string; short: string; tip: string; k: keyof Resources; value: number; next: number; warnAt: number; critAt: number; max?: number;
 }) {
   const cls = value <= critAt ? 'crit' : value <= warnAt ? 'warn' : '';
   return (
     <div className={`stat ${cls}`} title={tip}>
       <div className="stat-head">
-        <span className="name"><Icon k={k} />{name}</span>
+        <span className="name"><Icon k={k} /><span className="long">{name}</span><span className="short">{short}</span></span>
         <span>
           <span className="val">{value}</span>
           {max !== 100 && <span className="cap">/{max}</span>}
@@ -258,13 +258,13 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
           </div>
         </div>
         <div className="stats">
-          <Stat name={t('res.energy')} tip={t('res.tip.energy')} k="energy" value={r.energy} next={outcome.after.energy} warnAt={20} critAt={12} max={capacity} />
-          <Stat name={t('res.oxygen')} tip={t('res.tip.oxygen')} k="oxygen" value={r.oxygen} next={outcome.after.oxygen} warnAt={30} critAt={15} />
-          <Stat name={t('res.food')} tip={t('res.tip.food')} k="food" value={r.food} next={outcome.after.food} warnAt={30} critAt={15} />
-          <Stat name={t('res.health')} tip={t('res.tip.health')} k="health" value={r.health} next={outcome.after.health} warnAt={70} critAt={40} />
+          <Stat name={t('res.energy')} short={t('res.short.energy')} tip={t('res.tip.energy')} k="energy" value={r.energy} next={outcome.after.energy} warnAt={20} critAt={12} max={capacity} />
+          <Stat name={t('res.oxygen')} short={t('res.short.oxygen')} tip={t('res.tip.oxygen')} k="oxygen" value={r.oxygen} next={outcome.after.oxygen} warnAt={30} critAt={15} />
+          <Stat name={t('res.food')} short={t('res.short.food')} tip={t('res.tip.food')} k="food" value={r.food} next={outcome.after.food} warnAt={30} critAt={15} />
+          <Stat name={t('res.health')} short={t('res.short.health')} tip={t('res.tip.health')} k="health" value={r.health} next={outcome.after.health} warnAt={70} critAt={40} />
           <div className="stat" title={t('res.tip.research')}>
             <div className="stat-head">
-              <span className="name"><Icon k="research" />{t('res.research')}</span>
+              <span className="name"><Icon k="research" /><span className="long">{t('res.research')}</span><span className="short">{t('res.short.research')}</span></span>
               <span>
                 <span className="val">{r.research}/{MISSION.capacity.research}</span>
                 <Delta v={outcome.after.research - r.research} />

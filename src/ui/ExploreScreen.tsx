@@ -11,6 +11,7 @@ import { createCircuit, isSolved, powered, rotateTile, N, E, S, W, type Circuit 
 import { createPressureGame, inBand, P, stepPressure, type PressureGame } from '../rover/pressure';
 import { drawFrame, type Marker, type Particle } from '../rover/render';
 import { createRover, dist, ROVER, stepRover, type Input, type Rover } from '../rover/sim';
+import { cameraZoom, joystickVector, knobOffset, renderDpr } from '../rover/touch';
 import { MAP, type Site } from '../rover/world';
 
 type SiteId = Site['id'];
@@ -57,7 +58,14 @@ interface Props {
   fx: boolean;
 }
 
-interface Hud { battery: number; rate: number; zone: 'sun' | 'shadow' | 'deep' | 'charge'; near: SiteId | null; time: number }
+interface Hud { battery: number; rate: number; zone: 'sun' | 'shadow' | 'deep' | 'charge'; near: SiteId | null; time: number; drill: number }
+
+type DirKey = 'up' | 'down' | 'left' | 'right';
+
+/** Touch UI is shown on coarse pointers / touch screens, or as soon as a touch is seen. */
+const prefersTouch = () =>
+  typeof window !== 'undefined' &&
+  (window.matchMedia?.('(pointer: coarse)').matches || (navigator.maxTouchPoints ?? 0) > 0 || document.documentElement.classList.contains('touch'));
 
 const OVERLAY: StepKind[] = ['circuit', 'pressure'];
 
@@ -86,7 +94,10 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   const failuresRef = useRef(0);
   failuresRef.current = failures;
   const [flash, setFlash] = useState<string | null>(null);
-  const [hud, setHud] = useState<Hud>({ battery: ROVER.batteryStart, rate: 0, zone: 'sun', near: null, time: 0 });
+  const [hud, setHud] = useState<Hud>({ battery: ROVER.batteryStart, rate: 0, zone: 'sun', near: null, time: 0, drill: 0 });
+  const [touchUI, setTouchUI] = useState(prefersTouch);
+  const [portrait, setPortrait] = useState(() => typeof window !== 'undefined' && window.innerHeight > window.innerWidth);
+  const viewSize = useRef({ w: 0, h: 0 });
 
   // Mission 1: circuit
   const [circuit, setCircuit] = useState<Circuit>(createCircuit);
@@ -201,7 +212,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
 
   // ---------- keyboard ----------
   useEffect(() => {
-    const keymap: Record<string, keyof Input> = {
+    const keymap: Record<string, DirKey> = {
       KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
     };
     const down = (e: KeyboardEvent) => {
@@ -245,10 +256,19 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
       if ((e.code === 'ArrowDown' || e.code === 'KeyS') && valveDir.current === -1) valveDir.current = 0;
     };
     const blur = () => { input.current = { up: false, down: false, left: false, right: false }; valveDir.current = 0; drillHeld.current = false; };
+    // tab hidden / app switched: release every input and pause, so nothing stays pressed and no time is lost unseen
+    const vis = () => { if (document.hidden) { blur(); if (phaseRef.current === 'play') setPause(true); } };
+    const resize = () => setPortrait(window.innerHeight > window.innerWidth);
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', blur);
-    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); };
+    window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', resize);
+    document.addEventListener('visibilitychange', vis);
+    return () => {
+      window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur);
+      window.removeEventListener('resize', resize); window.removeEventListener('orientationchange', resize); document.removeEventListener('visibilitychange', vis);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [def, interact, rotate]);
 
@@ -258,6 +278,19 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   useEffect(() => {
     const cv = canvasRef.current!, g = cv.getContext('2d')!;
     let raf = 0, last = performance.now(), hudTimer = 0, gaugeTimer = 0;
+    // CSS size of the view; the backing store is CSS size × capped DPR (never stretched)
+    const measure = () => {
+      const box = wrapRef.current?.getBoundingClientRect();
+      if (!box) return;
+      viewSize.current = { w: box.width, h: box.height };
+      const dpr = renderDpr(window.devicePixelRatio);
+      const W = Math.max(1, Math.round(box.width * dpr)), H = Math.max(1, Math.round(box.height * dpr));
+      if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    };
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (ro && wrapRef.current) ro.observe(wrapRef.current);
+    window.addEventListener('resize', measure);
     const labels = {
       shadow: t('ex.map.shadow'), deep: t('ex.map.deep'), dock: t('ex.map.dock'), charger: t('ex.map.charger'), solarB: t('ex.map.solarB'),
       base: t('ex.map.base'), oxygen: t('ex.map.oxygen'), samples: t('ex.map.samples'), depot: t('ex.map.depot'),
@@ -314,12 +347,9 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
       particles.current = particles.current.filter((q) => (q.life -= dt * 1.4) > 0).map((q) => ({ ...q, x: q.x + q.vx * dt, y: q.y + q.vy * dt }));
       shake.current = fx ? Math.max(0, shake.current - dt * 20) : 0;
 
-      const box = wrapRef.current!.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      if (cv.width !== Math.round(box.width * dpr) || cv.height !== Math.round(box.height * dpr)) {
-        cv.width = Math.round(box.width * dpr);
-        cv.height = Math.round(box.height * dpr);
-      }
+      const box = viewSize.current;
+      if (!box.w) measure();
+      const dpr = cv.width / Math.max(1, box.w);
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       let nearId: SiteId | null = null;
@@ -333,24 +363,32 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
       // the faulty valve stays marked while the pressure panel is open
       if (kind === 'pressure') { const s = MAP.sites[faulty()]; markers.push({ x: s.x, y: s.y, r: s.r, state: 'near' }); }
       const leakSite = def.id === 'oxygenRepair' && !o2Done.current ? MAP.sites[faulty()] : null;
-      drawFrame(g, box.width, box.height, MAP, rover.current, {
+      drawFrame(g, box.w, box.h, MAP, rover.current, {
         t: now / 1000, targets: markers, solarRepaired: def.id !== 'solarRepair' || solarDone.current,
         oxygenRepaired: def.id !== 'oxygenRepair' || o2Done.current, leak: leakSite, cargo: cargo.current || collectedRef.current.length > 0,
         samples: def.id === 'sampleSurvey' ? (['sample1', 'sample2', 'sample3'] as SiteId[]).map((id) => ({ x: MAP.sites[id].x, y: MAP.sites[id].y, done: collectedRef.current.includes(id) })) : [],
         drill: drill.current,
-        inShadow: res.inShadow, shake: shake.current, particles: particles.current, labels,
+        inShadow: res.inShadow, shake: shake.current, particles: particles.current, labels, zoom: cameraZoom(box.w, box.h),
       });
       hudTimer += dt;
       if (hudTimer > 0.1) {
         hudTimer = 0;
-        setHud({ battery: rover.current.battery, rate: res.rate, zone: res.charging ? 'charge' : res.deep ? 'deep' : res.inShadow ? 'shadow' : 'sun', near: nearId, time: time.current });
+        setHud({ battery: rover.current.battery, rate: res.rate, zone: res.charging ? 'charge' : res.deep ? 'deep' : res.inShadow ? 'shadow' : 'sun', near: nearId, time: time.current, drill: drill.current });
       }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => { alive = false; cancelAnimationFrame(raf); };
+    return () => { alive = false; cancelAnimationFrame(raf); ro?.disconnect(); window.removeEventListener('resize', measure); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, def, targetSites, fx]);
+
+  // ---------- touch controls ----------
+  const onStick = (ax: number, ay: number) => { input.current.ax = ax; input.current.ay = ay; };
+  const onActionDown = () => {
+    if (def.steps[stepRef.current]?.kind === 'collect') drillHeld.current = true;
+    else interact();
+  };
+  const onActionUp = () => { drillHeld.current = false; };
 
   const playing = phase === 'play';
   const objective = playing && step ? t(step.obj) : '';
@@ -364,9 +402,18 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   const low = hud.battery < 25;
   const pct = Math.round(((def.id === 'solarRepair' ? exp.solarMult : exp.oxygenMult) ?? 1) * 100);
   const doneIdx = phase === 'success' ? def.steps.length : stepIdx;
+  const driving = playing && !paused && !OVERLAY.includes(step.kind);
+  const actionLabel = !hud.near ? null
+    : step.kind === 'goto' ? t('ex.touch.repair')
+    : step.kind === 'pickup' ? t('ex.touch.load')
+    : step.kind === 'scan' ? (scanned.includes(hud.near) ? null : t('ex.touch.scan'))
+    : step.kind === 'collect' ? (collected.includes(hud.near) ? null : t('ex.touch.drill'))
+    : step.kind === 'dock' ? t('ex.touch.dock') : null;
 
   return (
-    <div className={`explore screen ${fx ? '' : 'no-fx'}`}>
+    <div className={`explore screen ${fx ? '' : 'no-fx'} ${touchUI ? 'touch' : ''}`}
+      onPointerDown={(e) => { if (e.pointerType === 'touch' && !touchUI) setTouchUI(true); }}
+      onContextMenu={(e) => e.preventDefault()}>
       <header className="ex-top panel">
         <div className="ex-mission">
           <span className="tag">{t('ex.badge')}</span>
@@ -393,6 +440,15 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
         <canvas ref={canvasRef} className="ex-canvas" aria-label={t('ex.canvasAria')} />
         <div className="ex-scenario">{t('ex.scenario')}</div>
         {flash && playing && !OVERLAY.includes(step.kind) && <div className="ex-toast">{flash}</div>}
+        {touchUI && driving && (
+          <>
+            <TouchStick onMove={onStick} label={t('ex.touch.stick')} />
+            {actionLabel && (
+              <ActionButton label={actionLabel} hold={step.kind === 'collect'} progress={hud.drill} onDown={onActionDown} onUp={onActionUp} />
+            )}
+            <button type="button" className="touch-btn pause-btn" aria-label={t('ex.paused')} onClick={() => { onActionUp(); onStick(0, 0); setPause(true); }}>❚❚</button>
+          </>
+        )}
 
         {phase === 'brief' && (
           <div className="ex-overlay">
@@ -402,7 +458,8 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
               <p>{t(def.brief, { pct, leak: exp.oxygenLeak ?? 0, reward: exp.rewardResearch ?? 0 })}</p>
               <ol>{def.steps.map((s, i) => <li key={i}>{t(s.obj)}</li>)}</ol>
               <p className="ex-tip">{t('ex.brief.battery', { sun: ROVER.sunCharge, shadow: ROVER.shadowDrain, move: ROVER.moveDrain })}</p>
-              <p className="ex-tip">{t('ex.controls')}</p>
+              <p className="ex-tip">{touchUI ? t('ex.touch.controls') : t('ex.controls')}</p>
+              {touchUI && portrait && <p className="ex-tip ex-rotate">{t('ex.touch.rotate')}</p>}
               <div className="ex-actions">
                 <button className="btn btn-primary" autoFocus onClick={() => setPhase('play')}>{t('ex.start')}</button>
                 <button className="btn" onClick={() => onExit({ success: false, failures })}>{t('ex.later')}</button>
@@ -414,6 +471,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
         {playing && step.kind === 'circuit' && (
           <div className="ex-overlay soft">
             <div className="ex-card panel puzzle">
+              <button type="button" className="touch-btn close-btn" aria-label={t('ex.close')} onClick={() => setStep(stepRef.current - 1)}>✕</button>
               <h2>{t('ex.pz.title')}</h2>
               <p className="ex-tip">{t('ex.pz.help', { cost: ROVER.rotateCost })}</p>
               <CircuitView c={circuit} cursor={rotIdx[cursor]} onRotate={(i) => { setCursor(rotIdx.indexOf(i)); rotate(i); }} labels={{ src: t('ex.pz.source'), sink: t('ex.pz.sink') }} />
@@ -425,6 +483,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
         {playing && step.kind === 'pressure' && (
           <div className="ex-overlay soft">
             <div className="ex-card panel puzzle pressure">
+              <button type="button" className="touch-btn close-btn" aria-label={t('ex.close')} onClick={() => { valveDir.current = 0; setStep(stepRef.current - 1); }}>✕</button>
               <h2>{t('ex.o2.pz.title')}</h2>
               <p className="ex-tip">{t('ex.o2.pz.help', { hold: P.hold })}</p>
               <PressureView game={gauges} sel={sel} vent={ventFlash}
@@ -504,6 +563,71 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   );
 }
 
+/** Pointer capture keeps a finger's events on its control; it can throw for inactive pointers, which must not block the press. */
+function capture(e: React.PointerEvent) {
+  try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer not capturable: events still arrive while over the element */ }
+}
+
+/** Virtual joystick (bottom-left). Pointer Events with capture: one finger owns it; others stay free. */
+function TouchStick({ onMove, label }: { onMove: (ax: number, ay: number) => void; label: string }) {
+  const base = useRef<HTMLDivElement>(null);
+  const owner = useRef<number | null>(null);
+  const [knob, setKnob] = useState({ x: 0, y: 0 });
+  const R = 52; // travel radius (CSS px)
+  const update = (e: React.PointerEvent) => {
+    const b = base.current!.getBoundingClientRect();
+    const dx = e.clientX - (b.left + b.width / 2), dy = e.clientY - (b.top + b.height / 2);
+    const v = joystickVector(dx, dy, R);
+    setKnob(knobOffset(dx, dy, R));
+    onMove(v.x, v.y);
+  };
+  const end = (e?: React.PointerEvent) => {
+    if (e && owner.current !== null && e.pointerId !== owner.current) return;
+    owner.current = null;
+    setKnob({ x: 0, y: 0 });
+    onMove(0, 0);
+  };
+  // release on unmount only (callbacks change every render; a dependency here would cancel input 10× a second)
+  const moveRef = useRef(onMove);
+  moveRef.current = onMove;
+  useEffect(() => () => moveRef.current(0, 0), []);
+  return (
+    <div ref={base} className="touch-stick" role="application" aria-label={label}
+      onPointerDown={(e) => { if (owner.current !== null) return; owner.current = e.pointerId; capture(e); update(e); }}
+      onPointerMove={(e) => { if (e.pointerId === owner.current) update(e); }}
+      onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}>
+      <div className="touch-knob" style={{ transform: `translate(${knob.x}px, ${knob.y}px)` }} />
+    </div>
+  );
+}
+
+/** Context action button (bottom-right). Tap = E; for drilling, hold = E held, with a progress ring. */
+function ActionButton({ label, hold, progress, onDown, onUp }: { label: string; hold: boolean; progress: number; onDown: () => void; onUp: () => void }) {
+  const owner = useRef<number | null>(null);
+  const [pressed, setPressed] = useState(false);
+  const up = (e?: React.PointerEvent) => {
+    if (e && owner.current !== null && e.pointerId !== owner.current) return;
+    owner.current = null; setPressed(false); onUp();
+  };
+  const upRef = useRef(onUp);
+  upRef.current = onUp;
+  useEffect(() => () => upRef.current(), []);
+  const C = 2 * Math.PI * 44;
+  return (
+    <button type="button" className={`touch-btn action-btn ${pressed ? 'pressed' : ''} ${hold ? 'hold' : ''}`} aria-label={label}
+      onPointerDown={(e) => { if (owner.current !== null) return; owner.current = e.pointerId; capture(e); setPressed(true); onDown(); }}
+      onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up} onContextMenu={(e) => e.preventDefault()}>
+      {hold && (
+        <svg viewBox="0 0 100 100" aria-hidden>
+          <circle cx="50" cy="50" r="44" className="ring-bg" />
+          <circle cx="50" cy="50" r="44" className="ring-fg" strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(1, progress))} />
+        </svg>
+      )}
+      <span>{label}</span>
+    </button>
+  );
+}
+
 /** Three vertical gauges with target bands; hold ▲/▼ (keys or buttons) to move the selected valve. */
 function PressureView({ game, sel, vent, onSelect, onHold, labels }: {
   game: PressureGame; sel: number; vent: number | null;
@@ -532,7 +656,9 @@ function PressureView({ game, sel, vent, onSelect, onHold, labels }: {
               <div className="g-btns">
                 {([1, -1] as const).map((d) => (
                   <button key={d} type="button" className="g-btn" aria-label={d > 0 ? '▲' : '▼'}
-                    onPointerDown={(e) => { e.preventDefault(); onHold(i, d); }} onPointerUp={() => onHold(i, 0)} onPointerLeave={() => onHold(i, 0)}>
+                    onPointerDown={(e) => { e.preventDefault(); capture(e); onHold(i, d); }}
+                    onPointerUp={() => onHold(i, 0)} onPointerCancel={() => onHold(i, 0)} onLostPointerCapture={() => onHold(i, 0)}
+                    onContextMenu={(e) => e.preventDefault()}>
                     {d > 0 ? '▲' : '▼'}
                   </button>
                 ))}

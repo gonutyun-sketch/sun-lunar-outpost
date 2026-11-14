@@ -23,7 +23,10 @@ export default function App() {
   const [expedition, setExpedition] = useState<string | null>(null);
 
   const start = () => {
-    setGame(createInitialState(MISSION));
+    const fresh = createInitialState(MISSION);
+    // Development-only QA shortcut: ?devShift=N starts at shift N (stripped from production builds)
+    const dev = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('devShift')) : 0;
+    setGame(dev > 1 && dev <= MISSION.totalShifts ? { ...fresh, shift: dev } : fresh);
     setScreen('mission');
   };
   const toggleFx = () => {

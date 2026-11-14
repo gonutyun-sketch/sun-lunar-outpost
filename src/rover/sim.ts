@@ -25,6 +25,9 @@ export interface Input {
   down: boolean;
   left: boolean;
   right: boolean;
+  /** Analog direction from a touch joystick (−1..1, |v| ≤ 1). Used when no direction key is held. */
+  ax?: number;
+  ay?: number;
 }
 
 export interface Rover {
@@ -90,11 +93,16 @@ export function stepRover(m: WorldMap, prev: Rover, input: Input, dt: number, fr
   const r: Rover = { ...prev };
   let ix = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   let iy = (input.down ? 1 : 0) - (input.up ? 1 : 0);
+  let analog = false;
+  if (ix === 0 && iy === 0 && (input.ax || input.ay)) { ix = input.ax ?? 0; iy = input.ay ?? 0; analog = true; }
   if (frozen || r.battery <= 0) { ix = 0; iy = 0; }
   const len = Math.hypot(ix, iy);
+  // keys: full thrust (diagonals normalised); joystick: thrust and top speed follow the stick deflection
+  const mag = analog ? Math.min(1, len) : 1;
+  const topSpeed = ROVER.maxSpeed * (analog ? Math.max(0.35, mag) : 1);
   if (len > 0) {
-    r.vx += (ix / len) * ROVER.accel * dt;
-    r.vy += (iy / len) * ROVER.accel * dt;
+    r.vx += (ix / len) * ROVER.accel * mag * dt;
+    r.vy += (iy / len) * ROVER.accel * mag * dt;
     // gentle damping of the sideways component so turns feel smooth, not icy
     const k = Math.exp(-1.6 * dt);
     const dirx = ix / len, diry = iy / len;
@@ -107,7 +115,7 @@ export function stepRover(m: WorldMap, prev: Rover, input: Input, dt: number, fr
     r.vy *= k;
   }
   const sp = Math.hypot(r.vx, r.vy);
-  if (sp > ROVER.maxSpeed) { r.vx *= ROVER.maxSpeed / sp; r.vy *= ROVER.maxSpeed / sp; }
+  if (sp > topSpeed) { r.vx *= topSpeed / sp; r.vy *= topSpeed / sp; }
   if (sp < 2 && len === 0) { r.vx = 0; r.vy = 0; }
 
   r.x += r.vx * dt;

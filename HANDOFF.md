@@ -36,7 +36,10 @@ src/rover/world.ts      Exploration map data (craters, rocks, blocks, shadow zon
 src/rover/sim.ts        Rover physics + battery (pure, tested)
 src/rover/circuit.ts    Circuit rotation puzzle (pure, tested)
 src/rover/pressure.ts   Pressure-regulation minigame (pure, tested)
-src/rover/render.ts     Canvas drawing
+src/rover/render.ts     Canvas drawing (zoom-aware camera)
+src/rover/touch.ts      Joystick vector, camera zoom, DPR cap (pure, tested)
+tools/qa-responsive.js  Dev QA: layout checks + synthetic touch helpers (load in the browser console)
+tools/qa-sweep.js       Dev QA: walks all 15 screens at the current viewport (use with ?devShift=9)
 src/ui/Screens.tsx      Starfield, MainMenu, HowToPlay, Credits, Results (+ graph)
 src/App.tsx             Screen routing, effects toggle
 ```
@@ -63,6 +66,11 @@ Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(ba
 1. After deployment: add URL to README, run a full playthrough on the live URL.
 2. Apply the team's difficulty decision (see PROGRESS.md "Balance findings") if any.
 3. Submission materials.
+
+## Responsive / touch notes
+- Breakpoints: >1100 desktop grid; ≤1100 single column + fixed bottom action bar; ≤640 phone; max-height 500 landscape = compact exploration HUD.
+- Touch controls live in ExploreScreen (TouchStick, ActionButton); input feeds `Input.ax/ay` (analog) or drillHeld. Keep cleanup effects unmount-only (callbacks change every render).
+- `?devShift=N` (dev only) starts at shift N for QA.
 
 ## Cautions
 - Rebalancing: change src/data/mission.json, then `npm test` (fast bots) and `npm run analyze` (exact best). Keep random success < 15 % and every emergency choice viable.

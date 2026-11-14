@@ -547,4 +547,15 @@ export const en = {
   'ex.map.deep': "PERMANENT SHADOW (training) · heaters −3/s",
   'ex.zone.deep': "❄ Permanent shadow — heaters on",
   'ex.warn.deep': "Permanently shadowed zone: heaters drain −3/s!",
+
+  // touch controls
+  'ex.touch.repair': "REPAIR",
+  'ex.touch.load': "LOAD",
+  'ex.touch.scan': "SCAN",
+  'ex.touch.drill': "HOLD TO DRILL",
+  'ex.touch.dock': "DOCK",
+  'ex.touch.stick': "Drive joystick",
+  'ex.touch.controls': "Touch: drag the left joystick to drive · tap the right button to act (hold it to drill) · ❚❚ pauses.",
+  'ex.touch.rotate': "Tip: landscape gives a wider view of the terrain (portrait works too).",
+  'ex.close': "Close",
 };
