@@ -129,9 +129,9 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
               <span className="k">Solar this shift</span>
               <strong style={{ color: '#F4CA65' }}>+{outcome.solar}</strong> energy · sunlit {Math.round(outcome.illumination * 100)}% of shift
               <div className="sun-calc">
-                <span className="badge-data measured" title={MISSION.site.source.product}>NASA LOLA</span> site avg {Math.round(MISSION.site.averageSunlitFraction * 100)}%
+                <span className="badge-data measured" title="NASA LRO/LOLA: long-term (18.6-year) share of time the Sun is visible at this site. Not panel efficiency and not a forecast.">NASA LOLA</span> Sun visible {Math.round(MISSION.site.averageSunlitFraction * 100)}% long-term
                 {' × '}
-                <span className="badge-data game">SCENARIO</span> ×{sc.scenarioModifier.toFixed(2)}
+                <span className="badge-data game" title="Fictional training-scenario modifier for this shift">FICTIONAL SCENARIO</span> ×{sc.scenarioModifier.toFixed(2)}
               </div>
             </div>
             <div className="chip">

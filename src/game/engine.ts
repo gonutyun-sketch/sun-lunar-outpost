@@ -57,6 +57,12 @@ export function solarGeneration(cfg: MissionConfig, shift: number): number {
   return Math.round(Number((cfg.solar.basePeakOutput * shiftSunlight(cfg, shift)).toFixed(6)));
 }
 
+/** Total solar energy over the whole scenario if the base sat at a site with the given average sunlit fraction. */
+export function totalSolarWithSiteFraction(cfg: MissionConfig, fraction: number): number {
+  const alt = { ...cfg, site: { ...cfg.site, averageSunlitFraction: fraction } };
+  return cfg.shifts.reduce((sum, s) => sum + solarGeneration(alt, s.shift), 0);
+}
+
 export function facilityCost(cfg: MissionConfig, id: FacilityId): number {
   return cfg.facilities[id].energyCost;
 }

@@ -1,5 +1,5 @@
 import { MISSION } from '../game/config';
-import { computeScore } from '../game/engine';
+import { computeScore, totalSolarWithSiteFraction } from '../game/engine';
 import { missionSummary, missionTitle, takeaways } from '../game/debrief';
 import type { GameState, Resources } from '../game/types';
 
@@ -120,6 +120,10 @@ export function HowToPlay({ onBack, onStart }: { onBack: () => void; onStart: ()
 /* ---------------- Science & credits ---------------- */
 export function Credits({ onBack }: { onBack: () => void }) {
   const site = MISSION.site;
+  const siteSolar = {
+    site: totalSolarWithSiteFraction(MISSION, site.averageSunlitFraction),
+    alt: totalSolarWithSiteFraction(MISSION, site.nearbyComparisons[0].value),
+  };
   return (
     <div className="screen info-page">
       <header>
@@ -138,19 +142,33 @@ export function Credits({ onBack }: { onBack: () => void }) {
           (value {site.averageSunlitFraction}, from the NASA illumination map). It has the highest value in that map
           of the region from 85°S to the pole.
         </p>
-        <table>
-          <thead><tr><th>Location (same NASA map)</th><th>Average time sunlit</th></tr></thead>
-          <tbody>
-            <tr><td>SUN-01 site pixel (60 m)</td><td>{(site.averageSunlitFraction * 100).toFixed(1)}%</td></tr>
-            {site.nearbyComparisons.map((c) => (
-              <tr key={c.label}><td>{c.label}</td><td>{(c.value * 100).toFixed(1)}%{c.value === 0 ? ' (permanent shadow)' : ''}</td></tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="clarify">
+          <b>What 88.4% means, and what it does not.</b> It is the long-term share of time the Sun is visible from
+          this spot. It counts any time some part of the Sun’s disc shows above the terrain. It is <b>not</b> solar-panel
+          efficiency, <b>not</b> the share of full power received, and <b>not</b> a forecast for any real day.
+        </div>
+      </section>
+      <section className="panel">
+        <h2>WHY THE SITE MATTERS</h2>
+        <div className="site-bars" role="img" aria-label="Average time sunlit: site pixel, 300 metre area, Shackleton crater floor">
+          {[{ label: 'SUN-01 ridge pixel (60 m)', value: site.averageSunlitFraction }, ...site.nearbyComparisons].map((c) => (
+            <div className="site-bar" key={c.label}>
+              <span className="lbl">{c.label}</span>
+              <span className="track"><i style={{ width: `${c.value * 100}%` }} /></span>
+              <span className="pct">{(c.value * 100).toFixed(1)}%{c.value === 0 ? ' · permanent shadow' : ''}</span>
+            </div>
+          ))}
+        </div>
         <p>
-          A few hundred metres can matter enormously: on the ridge crest the Sun is almost always visible, but crater
-          floors nearby never see direct sunlight at all. They are among the coldest places in the Solar System and
-          may trap water ice.
+          All three values come from the same NASA map. Moving only ~150 m off the ridge crest drops the average
+          sunlight from 88% to 55%, and the nearby crater floor never sees the Sun at all. In this game, running the same
+          8-shift scenario with the 300 m average instead of the ridge value would give <b>{siteSolar.alt}</b> energy
+          instead of <b>{siteSolar.site}</b>. That is {Math.round((1 - siteSolar.alt / siteSolar.site) * 100)}% less
+          power for the same base. <span className="badge-data game">GAME CALCULATION</span>
+        </p>
+        <p>
+          That is why NASA uses LOLA terrain models to choose landing and base sites at the South Pole. Sunlit ridges can
+          power a base, and shadowed crater floors nearby may hold water ice.
         </p>
       </section>
       <section className="panel">
