@@ -9,6 +9,8 @@ _Last updated: 2026-11-14 (Phase 5)_
 | 5 | Science clarity, strategy testing, visual polish, deploy prep | ✅ Done (awaiting review) |
 | 5b | Korean / English localisation (default KO, switch anytime, saved) | ✅ Done |
 | 7 | Gameplay v2: 12 shifts / 3 chapters, 3 upgrades, 5 interactive emergencies, rebalance | ✅ Done (awaiting play-test review) |
+| 8 | Rover exploration P0: drive, collide, battery, Mission 1 (solar repair) + circuit puzzle, linked to base | ✅ Done (awaiting play-test) |
+| 8b | Rover P1: Mission 2 (oxygen parts), Mission 3 (samples), more minigames | ⏳ Not started (on hold for review) |
 | 6 | Public deployment, final QA, submission | ⏳ Needs GitHub/hosting account action by the team |
 
 ## Phase 5 delivered
@@ -49,6 +51,14 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - No constant strategy wins; everything-ON fails on power.
 - Random clicking: success 9.2 %, fail 84 % (v1: 45 % success).
 
+## Rover exploration (P0, 2026-11-14)
+- New mode `src/ui/ExploreScreen.tsx` (Canvas 2D) + pure logic in `src/rover/`: `world.ts` (2600×1600 map: base, dock, charging pad, O₂ plant, solar farm with segment B, craters, boulder field, 4 shadow zones), `sim.ts` (acceleration, drag, smooth turning, normalised diagonals, circle/rect sliding collisions, battery), `circuit.ts` (3×3 rotation puzzle, 6 rotations), `render.ts` (terrain cached offscreen, lights, dust particles, headlight cone in shadow, objective marker + off-screen arrow, bump shake).
+- Controls: WASD/arrows drive, E interact, Esc pause (or leave puzzle), R restart with confirmation. Puzzle: click, or ←/→ + E/Space, or 1–3.
+- Rover battery (fictional, separate from base): start 80/100, sun +1/s, shadow −1.5/s, driving −0.25/s, charging pad +12/s, puzzle rotation −0.5, 0 = failure. Shadows are labelled a training scenario; the NASA 0.88444 is not used per tile.
+- Mission 1 "Emergency solar array repair" (Shift 2, chosen because Shift 3 already has the O₂ emergency): from Shift 2 base solar is ×0.8 until repaired (persists into later shifts). Success restores 100 %. Each failed attempt (battery 0) costs the base 8 energy; retry is allowed. Base time does not pass during an expedition; App keeps the base state, only `applyExpedition` changes it.
+- Route measurements (bot): shadowed north shortcut ≈10.7 s / battery 72 at site; sunny south detour ≈12.2 s / 79. Real UI run: reach site 71.7, after puzzle in shadow 39, back at dock 24 (low-battery warning) — tension present.
+- Balance with the repair (sensible bot): repair at Shift 2 → success 90; after 2 failed attempts → 84; never repaired → partial (research goal missed). Random clicking (with repair) 9 % success.
+
 ## Remaining (priority order)
 1. **P0** Create GitHub repo, push, enable Pages (steps in HANDOFF.md) → public demo URL, add to README.
 2. **P1** Team decision on difficulty (above). If changed: update mission.json + tests.
@@ -60,7 +70,6 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Control panel may still scroll slightly at 1366×768 when 2+ warnings are shown (all critical warnings are now above the fold).
 - Mid-transition screenshots can show the fading shift banner (cosmetic).
 
-## Last test results (2026-11-14, gameplay v2)
-- `npm run typecheck` ✅ · `npm test` ✅ 33/33 (engine 19, balance 9, i18n 5) · `npm run build` ✅ · `npm run analyze` best = 100
-- Browser 1366×768 (Korean): expert plan through the real UI → 임무 성공 100/100 A (matches engine); decisions/upgrades listed on results; chapter/upgrade/milestone highlights shown.
-- Browser (English): careless play (defaults, first options, no upgrades) → Mission Failed, food, Shift 6, F 30, with lesson. No Korean leaks on EN screens; no console errors.
+## Last test results (2026-11-14, rover P0)
+- `npm run typecheck` ✅ · `npm test` ✅ 48/48 (engine 23, rover 10, balance 10, i18n 5) · `npm run build` ✅ (dev-only rover hook absent from bundle)
+- Browser 1366×768, real keyboard events: Korean — Shift 2 rover button + damage alert → briefing → drive to segment B (prompt E) → puzzle solved with ←/→/E → return → dock with E → success; base kept Shift 2 and resources, solar +22 → +27, button/alert gone. English — battery-out failure screen, Try again (battery 80 at dock), R restart confirmation, Esc pause, Back to base → base energy −8, mission still open; game continued to the end (Mission Failed, power, Shift 11 for careless no-repair play). No console errors.

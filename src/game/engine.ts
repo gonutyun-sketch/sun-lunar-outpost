@@ -5,6 +5,7 @@
  */
 import type {
   EventChoice,
+  ExpeditionConfig,
   Facilities,
   FacilityId,
   FailReason,
@@ -31,6 +32,8 @@ export function createInitialState(cfg: MissionConfig): GameState {
     upgrades: { ...NO_UPGRADES },
     build: null,
     choice: null,
+    expeditionsDone: [],
+    expeditionFails: 0,
     status: 'playing',
     history: [],
   };
@@ -113,6 +116,37 @@ export interface ShiftContext {
   upgrades?: Upgrades;
   build?: UpgradeId | null;
   choice?: string | null;
+  /** Solar array damaged by an unfinished expedition (multiplies solar output). */
+  damageMult?: number;
+}
+
+/** Expedition that can be launched now (available and not yet completed). */
+export function activeExpedition(state: GameState, cfg: MissionConfig): ExpeditionConfig | undefined {
+  if (state.status !== 'playing') return undefined;
+  return cfg.expeditions.find((e) => state.shift >= e.fromShift && !state.expeditionsDone.includes(e.id));
+}
+
+/** Solar output multiplier from damage that an expedition has not repaired yet. */
+export function solarDamageMult(state: GameState, cfg: MissionConfig): number {
+  return cfg.expeditions
+    .filter((e) => e.solarMult !== undefined && state.shift >= e.fromShift && !state.expeditionsDone.includes(e.id))
+    .reduce((m, e) => m * (e.solarMult ?? 1), 1);
+}
+
+/**
+ * Apply the result of a rover expedition to the base. Base time does not pass during an expedition.
+ * Each failed attempt costs base energy (crew recovers the rover); success removes the damage.
+ */
+export function applyExpedition(state: GameState, cfg: MissionConfig, id: string, result: { success: boolean; failures: number }): GameState {
+  const exp = cfg.expeditions.find((e) => e.id === id);
+  if (!exp || state.status !== 'playing' || state.expeditionsDone.includes(id)) return state;
+  const cost = exp.failEnergyCost * Math.max(0, result.failures);
+  return {
+    ...state,
+    resources: { ...state.resources, energy: Math.max(0, state.resources.energy - cost) },
+    expeditionsDone: result.success ? [...state.expeditionsDone, id] : state.expeditionsDone,
+    expeditionFails: state.expeditionFails + Math.max(0, result.failures),
+  };
 }
 
 /**
@@ -140,7 +174,8 @@ export function simulateShift(
   if (before.research >= cap.research) ran.lab = false;
 
   // 1–2. Solar production, charge battery up to capacity.
-  const solar = solarGeneration(cfg, shift, upgrades, choice?.solarMult ?? 1);
+  const damageMult = ctx.damageMult ?? 1;
+  const solar = solarGeneration(cfg, shift, upgrades, (choice?.solarMult ?? 1) * damageMult);
   const sunlight = shiftSunlight(cfg, shift);
   const available = Math.min(capacity, before.energy + solar);
 
@@ -191,6 +226,7 @@ export function simulateShift(
     illumination: sunlight,
     scenarioModifier: sc.scenarioModifier,
     solar,
+    solarDamaged: damageMult < 1,
     capacity,
     available,
     demand,
@@ -217,6 +253,7 @@ export function projectCurrentShift(state: GameState, cfg: MissionConfig): Shift
     upgrades: state.upgrades,
     build: state.build,
     choice: state.choice,
+    damageMult: solarDamageMult(state, cfg),
   });
 }
 

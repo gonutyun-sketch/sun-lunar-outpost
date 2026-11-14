@@ -25,6 +25,8 @@ interface Props {
   battery?: number;
   /** Dust coating the solar panels this shift. */
   dust?: boolean;
+  /** Solar segment B damaged (rover repair pending). */
+  damaged?: boolean;
 }
 
 const NONE: Upgrades = { solar: false, oxygen: false, battery: false };
@@ -54,7 +56,7 @@ const Led = ({ x, y, on }: { x: number; y: number; on: boolean }) => (
   <circle cx={x} cy={y} r={4} fill={on ? '#6CE0B2' : '#3a4a60'} className={on ? 'blink' : undefined} />
 );
 
-export function BaseScene({ facilities: f, illumination, radiation, shift, highlight, upgrades = NONE, building = null, fresh = null, battery = 0.5, dust = false }: Props) {
+export function BaseScene({ facilities: f, illumination, radiation, shift, highlight, upgrades = NONE, building = null, fresh = null, battery = 0.5, dust = false, damaged = false }: Props) {
   const fx = (id: UpgradeId) => (fresh === id ? 'upg-fresh' : undefined);
   const { t } = useI18n();
   const sunY = 300 - illumination * 60; // the Sun skims the polar horizon
@@ -184,6 +186,13 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
               ))}
               <line x1={x + 24} y1={250} x2={x + 24} y2={342} stroke="#2f6a99" />
               <rect x={x} y={250} width={48} height={92} rx={2} fill="#F4CA65" opacity={panelGlow * 0.35} className="panel-glow" />
+              {damaged && i === 2 && (
+                <g>
+                  <rect x={x} y={250} width={48} height={92} rx={2} fill="#3a2a2e" opacity="0.85" />
+                  <rect x={x} y={250} width={48} height={92} rx={2} fill="#ff6b7a" className="blink" opacity="0.45" />
+                  <path d={`M${x + 10} 270 l10 14 l-6 4 l14 18`} stroke="#F4CA65" strokeWidth="2" fill="none" />
+                </g>
+              )}
               {upgrades.solar && (
                 <g className={fx('solar')}>
                   <rect x={x + 22} y={206} width={4} height={44} fill="#c9a24a" />

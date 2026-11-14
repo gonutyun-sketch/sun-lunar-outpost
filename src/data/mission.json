@@ -225,5 +225,13 @@
       "shift": 12,
       "scenarioModifier": 0.63
     }
+  ],
+  "expeditions": [
+    {
+      "id": "solarRepair",
+      "fromShift": 2,
+      "solarMult": 0.8,
+      "failEnergyCost": 8
+    }
   ]
 }

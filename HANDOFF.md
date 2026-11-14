@@ -31,6 +31,11 @@ src/game/balance.test.ts Strategy/balance tests (sensible bot wins, no-upgrade f
 tools/best-play.test.ts Exact best-play search — run with `npm run analyze` (~4 min, 6 GB RAM)
 src/ui/MissionScreen.tsx Top bar, scene, controls, power budget, log, shift report modal
 src/ui/BaseScene.tsx    SVG lunar base
+src/ui/ExploreScreen.tsx Rover exploration mode (Canvas loop, input, HUD, puzzle overlay, pause/fail/success)
+src/rover/world.ts      Exploration map data (craters, rocks, blocks, shadow zones, sites)
+src/rover/sim.ts        Rover physics + battery (pure, tested)
+src/rover/circuit.ts    Circuit rotation puzzle (pure, tested)
+src/rover/render.ts     Canvas drawing
 src/ui/Screens.tsx      Starfield, MainMenu, HowToPlay, Credits, Results (+ graph)
 src/App.tsx             Screen routing, effects toggle
 ```
@@ -46,6 +51,12 @@ Per shift:
 7. lab +1 research (goal 4). Upgrade queued this shift becomes active next shift.
 8. fail: oxygen ≤ 0, food ≤ 0, health < 40, habitat power. After shift 12: research 4 → success else partial.
 Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(battery,30)/30).
+
+## Rover expeditions
+- Config: mission.json `expeditions` (id, fromShift, solarMult, failEnergyCost). Engine: `activeExpedition`, `solarDamageMult`, `applyExpedition`. State: `expeditionsDone`, `expeditionFails`.
+- Flow: MissionScreen "LAUNCH ROVER" → App screen 'explore' (base state untouched) → ExploreScreen onExit({success, failures}) → applyExpedition → back to mission.
+- To add Mission 2/3: add config entry + objectives/targets in ExploreScreen (phase machine goto → task → return) + `ex.*` keys in en.ts/ko.ts.
+- Tuning: ROVER constants in src/rover/sim.ts; map in world.ts; `npx vitest run src/rover` prints route times/battery.
 
 ## Next tasks for the next AI
 1. After deployment: add URL to README, run a full playthrough on the live URL.

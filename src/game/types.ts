@@ -60,6 +60,17 @@ export interface UpgradeConfig {
   producesAfter?: number;
 }
 
+/** Rover expedition (played in the exploration mode). FICTIONAL training scenario. */
+export interface ExpeditionConfig {
+  id: string;
+  /** Mission becomes available (and its damage starts) at this shift. */
+  fromShift: number;
+  /** Solar output multiplier while the mission is not completed. */
+  solarMult?: number;
+  /** Base energy spent to recover the rover after each failed attempt. */
+  failEnergyCost: number;
+}
+
 export interface ChapterConfig {
   id: number;
   from: number;
@@ -113,6 +124,7 @@ export interface MissionConfig {
   failure: { minHealth: number };
   chapters: ChapterConfig[];
   events: MissionEvent[];
+  expeditions: ExpeditionConfig[];
   shifts: ShiftConfig[];
 }
 
@@ -142,6 +154,8 @@ export interface ShiftOutcome {
   illumination: number;
   scenarioModifier: number;
   solar: number;
+  /** Solar array damaged (expedition pending) this shift. */
+  solarDamaged: boolean;
   /** Battery capacity in force this shift. */
   capacity: number;
   /** Battery after solar charging (capped at capacity), before any demand. */
@@ -182,6 +196,10 @@ export interface GameState {
   build: UpgradeId | null;
   /** Player's decision for this shift's emergency, if any. */
   choice: string | null;
+  /** Rover expeditions completed successfully. */
+  expeditionsDone: string[];
+  /** Failed rover attempts (each cost base energy). */
+  expeditionFails: number;
   status: MissionStatus;
   failReason?: FailReason;
   history: ShiftReport[];

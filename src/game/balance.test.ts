@@ -62,6 +62,15 @@ describe('thoughtful play wins, careless play fails', () => {
     expect(s.failReason).toBe('power');
   });
 
+  it('rover repair matters: early repair wins, never repairing loses the research goal', () => {
+    const early = simulate(MISSION, 1, sensiblePolicy(MISSION), 1, { repairAt: 2 });
+    const twoFails = simulate(MISSION, 1, sensiblePolicy(MISSION), 1, { repairAt: 2, failures: 2 });
+    const never = simulate(MISSION, 1, sensiblePolicy(MISSION), 1, { repairAt: null });
+    expect(early.success).toBe(1);
+    expect(twoFails.avgScore).toBeLessThan(early.avgScore);
+    expect(never.success).toBe(0);
+  });
+
   it('random clicking rarely succeeds and usually fails', () => {
     const r = simulate(MISSION, 3000, randomPolicy, 7);
     // eslint-disable-next-line no-console

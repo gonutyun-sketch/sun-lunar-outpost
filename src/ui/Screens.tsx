@@ -359,6 +359,7 @@ export function Results({ state, onRestart, onMenu }: { state: GameState; onRest
               <li key={h.shift}><span className="when">{t('results.shiftN', { n: h.shift })}</span> <b>{t(`upg.${h.built}` as Key)}</b></li>
             ))}
             {!state.history.some((h) => h.built) && <li className="muted">{t('results.noUpgrades')}</li>}
+            {state.expeditionsDone.includes('solarRepair') && <li><span className="when">🚙</span> <b>{t('ex.doneTag')}</b></li>}
           </ul>
         </div>
       </section>

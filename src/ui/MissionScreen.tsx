@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { MISSION } from '../game/config';
 import {
+  activeExpedition,
   advanceShift,
   batteryCapacity,
   canAdvance,
@@ -15,6 +16,7 @@ import {
   isForcedOn,
   oxygenOutput,
   projectCurrentShift,
+  solarDamageMult,
   solarGeneration,
   toggleBuild,
   toggleFacility,
@@ -39,6 +41,8 @@ interface Props {
   setState: (s: GameState) => void;
   onFinish: () => void;
   onQuit: () => void;
+  /** Launch a rover expedition (exploration mode). */
+  onExplore: (id: string) => void;
   fx: boolean;
   onToggleFx: () => void;
 }
@@ -113,6 +117,7 @@ export function explainReport(r: ShiftReport, t: T): string[] {
   out.push(wasted > 0 ? t('exp.solarWasted', { solar: r.solar, pct, wasted }) : t('exp.solar', { solar: r.solar, pct }));
   out.push(t('exp.used', { n: r.habitatPowerFailure ? r.available : r.demand }));
   if (r.habitatPowerFailure) out.push(t('exp.habitatFail'));
+  if (r.solarDamaged) out.push(t('exp.solarDamaged', { pct: Math.round((MISSION.expeditions[0]?.solarMult ?? 1) * 100) }));
   const ev = r.eventId ? MISSION.events.find((e) => e.id === r.eventId) : undefined;
   const choice = ev?.choices.find((c) => c.id === r.choiceId);
   if (ev && choice) out.push(t('exp.event', { title: t(`ev.${ev.id}.title` as Key), choice: t(`ev.${ev.id}.${choice.id}` as Key) }));
@@ -196,7 +201,7 @@ function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState
   );
 }
 
-export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleFx }: Props) {
+export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx, onToggleFx }: Props) {
   const { t } = useI18n();
   const [report, setReport] = useState<ShiftReport | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
@@ -214,6 +219,8 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
   const nextUpgrades = outcome.built ? { ...state.upgrades, [outcome.built]: true } : state.upgrades;
   const nextSolar = state.shift < MISSION.totalShifts ? solarGeneration(MISSION, state.shift + 1, nextUpgrades) : null;
   const lastBuilt = state.history[state.history.length - 1]?.built ?? null;
+  const expedition = activeExpedition(state, MISSION);
+  const damagePct = Math.round(solarDamageMult(state, MISSION) * 100);
   const facFocus = focus && FACILITY_IDS.includes(focus as FacilityId) ? (focus as FacilityId) : null;
   // Science briefing: hovered facility/upgrade > current emergency > shift card.
   const eduKey = focus ? `edu.${focus}` : event ? `edu.ev.${event.id}` : `edu.${state.shift}`;
@@ -278,7 +285,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
         <div className="scene-wrap panel">
           <BaseScene key={`scene-${state.shift}`} facilities={outcome.ran} illumination={outcome.illumination}
             radiation={!!event?.radiation} shift={state.shift} highlight={facFocus} upgrades={state.upgrades}
-            building={state.build} fresh={lastBuilt} battery={Math.min(1, r.energy / capacity)} dust={event?.id === 'dust' && state.choice !== 'eva'} />
+            building={state.build} fresh={lastBuilt} battery={Math.min(1, r.energy / capacity)} dust={event?.id === 'dust' && state.choice !== 'eva'} damaged={damagePct < 100} />
           {!ended && (
             <div className={`shift-banner ${chapterStart ? 'chapter' : ''}`} key={`banner-${state.shift}`} aria-hidden>
               {chapterStart ? (
@@ -362,6 +369,10 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
 
           <UpgradePanel state={state} setState={setState} onFocus={setFocus} />
 
+          {expedition && (
+            <div className="alert caution expedition-alert">{t('ex.pending', { pct: damagePct })}</div>
+          )}
+
           {warnings.length > 0 && (
             <div className="alerts" role="alert">
               {warnings.map((w, i) => (
@@ -415,6 +426,9 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
           <p>{t(`${eduKey}.text` as Key)}</p>
         </section>
         <div className="advance panel">
+          {expedition && !ended && (
+            <button className="btn btn-rover" onClick={() => onExplore(expedition.id)} title={t('ex.launchTip')}>🚙 {t('ex.launch')}</button>
+          )}
           {ended ? (
             <button className="btn btn-primary" onClick={onFinish}>{t('advance.results')}</button>
           ) : (

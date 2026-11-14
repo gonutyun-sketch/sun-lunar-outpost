@@ -12,6 +12,7 @@
 - Gameplay screenshots in docs/screenshots/ are captures of the actual game (not generated images).
 - Korean/English localisation system and the Korean translation of all UI and educational text (to be reviewed by Korean-speaking team members).
 - Gameplay v2 design proposal and implementation (upgrades, emergencies, chapters), balance bots and the exact best-play search; the numbers were tuned by simulation and should be reviewed by the team after human play-testing.
+- Rover exploration mode: map, physics, battery model, circuit puzzle, Canvas renderer (procedural, no external assets) and KO/EN texts.
 - Draft educational text (science briefings, takeaways) — reviewed by the team for accuracy.
 
 ## Human contributions

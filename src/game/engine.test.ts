@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { MISSION } from './config';
 import {
+  activeExpedition,
   advanceShift,
+  applyExpedition,
   batteryCapacity,
   canAdvance,
   chooseOption,
@@ -13,6 +15,7 @@ import {
   projectCurrentShift,
   shiftSunlight,
   simulateShift,
+  solarDamageMult,
   solarGeneration,
   toggleBuild,
   toggleFacility,
@@ -21,7 +24,8 @@ import type { Facilities, GameState, Upgrades } from './types';
 
 const OFF: Facilities = { oxygen: false, greenhouse: false, shelter: false, lab: false };
 const NOUP: Upgrades = { solar: false, oxygen: false, battery: false };
-const at = (shift: number, patch: Partial<GameState> = {}): GameState => ({ ...createInitialState(MISSION), shift, ...patch });
+// Helper state for isolated rule tests: the rover repair is already done unless a test says otherwise.
+const at = (shift: number, patch: Partial<GameState> = {}): GameState => ({ ...createInitialState(MISSION), expeditionsDone: ['solarRepair'], shift, ...patch });
 
 describe('mission structure', () => {
   it('has 12 shifts in 3 chapters and 5 forecast emergencies', () => {
@@ -170,6 +174,41 @@ describe('emergencies', () => {
     expect(n.choice).toBeNull();
     expect(n.history[0].choiceId).toBe('patch');
     expect(getEvent(MISSION, n.shift)).toBeUndefined();
+  });
+});
+
+describe('rover expedition: solar repair', () => {
+  const fresh = (shift: number): GameState => ({ ...createInitialState(MISSION), shift });
+  it('damage starts at shift 2 and reduces solar until repaired', () => {
+    expect(activeExpedition(fresh(1), MISSION)).toBeUndefined();
+    expect(solarDamageMult(fresh(1), MISSION)).toBe(1);
+    const s2 = fresh(2);
+    expect(activeExpedition(s2, MISSION)?.id).toBe('solarRepair');
+    const o = projectCurrentShift(s2, MISSION);
+    expect(o.solarDamaged).toBe(true);
+    expect(o.solar).toBe(solarGeneration(MISSION, 2, NOUP, 0.8));
+  });
+  it('success removes the damage; base time does not pass', () => {
+    const s = applyExpedition(fresh(2), MISSION, 'solarRepair', { success: true, failures: 0 });
+    expect(s.shift).toBe(2);
+    expect(s.resources).toEqual(MISSION.initial);
+    expect(activeExpedition(s, MISSION)).toBeUndefined();
+    expect(projectCurrentShift(s, MISSION).solar).toBe(solarGeneration(MISSION, 2));
+    expect(applyExpedition(s, MISSION, 'solarRepair', { success: true, failures: 3 })).toBe(s); // cannot apply twice
+  });
+  it('each failed attempt costs base energy and the damage stays', () => {
+    const s = applyExpedition(fresh(2), MISSION, 'solarRepair', { success: false, failures: 2 });
+    expect(s.resources.energy).toBe(55 - 16);
+    expect(s.expeditionFails).toBe(2);
+    expect(activeExpedition(s, MISSION)?.id).toBe('solarRepair');
+    const z = applyExpedition({ ...fresh(2), resources: { ...MISSION.initial, energy: 5 } }, MISSION, 'solarRepair', { success: false, failures: 1 });
+    expect(z.resources.energy).toBe(0); // never negative
+  });
+  it('the damage persists into later shifts until repaired', () => {
+    let s = fresh(2);
+    s = advanceShift(s, MISSION);
+    expect(s.shift).toBe(3);
+    expect(solarDamageMult(s, MISSION)).toBe(0.8);
   });
 });
 
