@@ -44,7 +44,7 @@ export function takeaways(state: GameState, cfg: MissionConfig, t: T): string[] 
 
   // 2. Radiation
   const radiationShifts = h.filter((r) => r.radiation !== 'none');
-  const exposed = radiationShifts.filter((r) => r.radiation === 'exposed').length;
+  const exposed = radiationShifts.filter((r) => r.radiation === 'exposed' || r.radiation === 'partial').length;
   if (radiationShifts.length === 0) out.push(t('take.radNone'));
   else if (exposed === 0) out.push(t(radiationShifts.length === 1 ? 'take.radSafe1' : 'take.radSafeN', { n: radiationShifts.length }));
   else out.push(t(exposed === 1 ? 'take.radHit1' : 'take.radHitN', { n: exposed }));

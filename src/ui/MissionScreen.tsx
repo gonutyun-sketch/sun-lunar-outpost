@@ -2,17 +2,36 @@ import { useMemo, useState } from 'react';
 import { MISSION } from '../game/config';
 import {
   advanceShift,
+  batteryCapacity,
   canAdvance,
-  getShiftConfig,
+  canBuild,
+  chooseOption,
+  facilityCost,
+  getChapter,
+  getEvent,
+  getForecast,
   getWarnings,
   isFacilityAvailable,
+  isForcedOn,
+  oxygenOutput,
   projectCurrentShift,
   solarGeneration,
+  toggleBuild,
   toggleFacility,
 } from '../game/engine';
-import { FACILITY_IDS, type FacilityId, type GameState, type Resources, type ShiftReport } from '../game/types';
+import {
+  FACILITY_IDS,
+  UPGRADE_IDS,
+  type EventChoice,
+  type FacilityId,
+  type GameState,
+  type MissionEvent,
+  type Resources,
+  type ShiftReport,
+  type UpgradeId,
+} from '../game/types';
 import { LangToggle, useI18n } from '../i18n/I18n';
-import type { Key, T } from '../i18n/translate';
+import type { Key, Params, T } from '../i18n/translate';
 import { BaseScene } from './BaseScene';
 
 interface Props {
@@ -52,8 +71,8 @@ function Delta({ v }: { v: number }) {
 
 const signed = (v: number) => (v >= 0 ? `+${v}` : `${v}`);
 
-function Stat({ name, tip, k, value, next, warnAt, critAt }: {
-  name: string; tip: string; k: keyof Resources; value: number; next: number; warnAt: number; critAt: number;
+function Stat({ name, tip, k, value, next, warnAt, critAt, max = 100 }: {
+  name: string; tip: string; k: keyof Resources; value: number; next: number; warnAt: number; critAt: number; max?: number;
 }) {
   const cls = value <= critAt ? 'crit' : value <= warnAt ? 'warn' : '';
   return (
@@ -62,17 +81,31 @@ function Stat({ name, tip, k, value, next, warnAt, critAt }: {
         <span className="name"><Icon k={k} />{name}</span>
         <span>
           <span className="val">{value}</span>
+          {max !== 100 && <span className="cap">/{max}</span>}
           <Delta v={next - value} />
         </span>
       </div>
       <div className="bar" aria-hidden>
-        <i style={{ width: `${value}%`, background: COLORS[k] }} />
+        <i style={{ width: `${Math.min(100, (value / max) * 100)}%`, background: COLORS[k] }} />
       </div>
     </div>
   );
 }
 
-/** Localised explanation of a finished shift, built from the engine's outcome numbers (same data the engine used). */
+/** Numbers used inside event choice texts. */
+export function choiceParams(ev: MissionEvent, c: EventChoice): Params {
+  return {
+    energy: c.energyCost ?? 0,
+    pct: Math.round((c.oxygenProdMult ?? 1) * 100),
+    shelter: MISSION.facilities.shelter.energyCost,
+    dmg: c.radiationDamage ?? ev.radiation?.damage ?? 0,
+    health: c.health ?? 0,
+    mult: c.solarMult ?? 1,
+    food: c.food ?? 0,
+  };
+}
+
+/** Localised explanation of a finished shift, built from the engine's outcome numbers. */
 export function explainReport(r: ShiftReport, t: T): string[] {
   const out: string[] = [];
   const wasted = r.before.energy + r.solar - r.available;
@@ -80,58 +113,139 @@ export function explainReport(r: ShiftReport, t: T): string[] {
   out.push(wasted > 0 ? t('exp.solarWasted', { solar: r.solar, pct, wasted }) : t('exp.solar', { solar: r.solar, pct }));
   out.push(t('exp.used', { n: r.habitatPowerFailure ? r.available : r.demand }));
   if (r.habitatPowerFailure) out.push(t('exp.habitatFail'));
-  const running = (id: FacilityId) => r.facilities[id] && !r.habitatPowerFailure;
-  out.push(running('oxygen')
-    ? t('exp.o2On', { prod: MISSION.facilities.oxygen.produces, use: MISSION.crew.oxygenUse })
+  const ev = r.eventId ? MISSION.events.find((e) => e.id === r.eventId) : undefined;
+  const choice = ev?.choices.find((c) => c.id === r.choiceId);
+  if (ev && choice) out.push(t('exp.event', { title: t(`ev.${ev.id}.title` as Key), choice: t(`ev.${ev.id}.${choice.id}` as Key) }));
+  out.push(r.oxygenProduced > 0
+    ? t('exp.o2Prod', { prod: r.oxygenProduced, use: MISSION.crew.oxygenUse })
     : t('exp.o2Off', { use: MISSION.crew.oxygenUse }));
-  out.push(running('greenhouse')
-    ? t('exp.foodOn', { prod: MISSION.facilities.greenhouse.produces, use: MISSION.crew.foodUse })
+  out.push(r.foodProduced > 0
+    ? t('exp.foodOn', { prod: r.foodProduced, use: MISSION.crew.foodUse })
     : t('exp.foodOff', { use: MISSION.crew.foodUse }));
+  if (choice?.food) out.push(t('exp.eventFood', { n: choice.food }));
+  if (choice?.health) out.push(t('exp.eventHealth', { n: choice.health }));
   if (r.radiation === 'protected') out.push(t('exp.radSafe'));
-  if (r.radiation === 'exposed') out.push(t('exp.radHit', { dmg: MISSION.radiation.healthDamage }));
+  if (r.radiation === 'exposed') out.push(t('exp.radHit', { dmg: r.radiationDamage }));
+  if (r.radiation === 'partial') out.push(t('exp.radPartial', { dmg: r.radiationDamage }));
   if (r.researchGained) out.push(t('exp.research'));
+  if (r.built) out.push(t('exp.built', { name: t(`upg.${r.built}` as Key) }));
   return out;
+}
+
+function EventCard({ state, ev, onChoose }: { state: GameState; ev: MissionEvent; onChoose: (id: string) => void }) {
+  const { t } = useI18n();
+  const chosen = state.choice;
+  return (
+    <div className={`event-card ${ev.radiation ? 'radiation' : ''} ${chosen ? 'decided' : ''}`} role="group" aria-label={t(`ev.${ev.id}.title` as Key)}>
+      <div className="event-head">
+        <span className="badge-data game">{t('ev.badge')}</span>
+        <span className={`event-state ${chosen ? 'done' : ''}`}>{t(chosen ? 'ev.chosen' : 'ev.decide')}</span>
+      </div>
+      <h3>{ev.radiation ? '☢ ' : '⚠ '}{t(`ev.${ev.id}.title` as Key)}</h3>
+      {!chosen && <p className="event-desc">{t(`ev.${ev.id}.desc` as Key)}</p>}
+      <div className="event-choices">
+        {ev.choices.map((c) => (
+          <button key={c.id} type="button" className={`choice ${chosen === c.id ? 'picked' : ''}`} aria-pressed={chosen === c.id}
+            disabled={state.status !== 'playing'} onClick={() => onChoose(c.id)}>
+            <b>{t(`ev.${ev.id}.${c.id}` as Key)}</b>
+            <small>{t(`ev.${ev.id}.${c.id}.fx` as Key, choiceParams(ev, c))}</small>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState: (s: GameState) => void; onFocus: (k: string | null) => void }) {
+  const { t } = useI18n();
+  const U = MISSION.upgrades;
+  const eff: Record<UpgradeId, string> = {
+    solar: t('upg.solar.eff', { a: MISSION.solar.basePeakOutput, b: MISSION.solar.basePeakOutput + (U.solar.bonus ?? 0) }),
+    oxygen: t('upg.oxygen.eff', { c1: MISSION.facilities.oxygen.energyCost, c2: U.oxygen.energyCostAfter ?? 0, p1: MISSION.facilities.oxygen.produces, p2: U.oxygen.producesAfter ?? 0 }),
+    battery: t('upg.battery.eff', { a: MISSION.capacity.energy, b: MISSION.capacity.energy + (U.battery.bonus ?? 0) }),
+  };
+  return (
+    <div className="upgrades">
+      <div className="upg-head"><span className="tag">{t('upg.title')}</span><small>{t('upg.note')}</small></div>
+      {UPGRADE_IDS.map((id) => {
+        const installed = state.upgrades[id];
+        const building = state.build === id;
+        const can = canBuild(state, MISSION, id);
+        const label = installed ? t('upg.installed')
+          : building ? t('upg.building')
+          : state.shift < MISSION.upgradeUnlockShift ? t('upg.locked', { n: MISSION.upgradeUnlockShift })
+          : !can ? t('upg.tooLate') : t('upg.build');
+        const tip = installed ? t('upg.tipInstalled') : building ? t('upg.tipCancel') : t('upg.tipBuild', { n: U[id].energyCost });
+        return (
+          <div key={id} className={`upg ${installed ? 'installed' : ''} ${building ? 'building' : ''}`}
+            onMouseEnter={() => onFocus(`upg.${id}`)} onMouseLeave={() => onFocus(null)}>
+            <div className="upg-text">
+              <b>{t(`upg.${id}` as Key)}</b>
+              <small>{eff[id]}</small>
+            </div>
+            <button type="button" className="upg-btn" disabled={installed || (!can && !building)} title={tip} aria-pressed={building}
+              onFocus={() => onFocus(`upg.${id}`)} onBlur={() => onFocus(null)}
+              onClick={() => setState(toggleBuild(state, MISSION, id))}>
+              <span>{label}</span>
+              {!installed && <em>{t('upg.cost', { n: U[id].energyCost })}</em>}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleFx }: Props) {
   const { t } = useI18n();
   const [report, setReport] = useState<ShiftReport | null>(null);
-  const [eduFocus, setEduFocus] = useState<FacilityId | null>(null);
+  const [focus, setFocus] = useState<string | null>(null);
 
-  const sc = getShiftConfig(MISSION, state.shift);
   const outcome = useMemo(() => projectCurrentShift(state, MISSION), [state]);
   const warnings = useMemo(() => getWarnings(state, MISSION, outcome), [state, outcome]);
   const allowed = canAdvance(outcome);
   const r = state.resources;
-  const nextSolar = state.shift < MISSION.totalShifts ? solarGeneration(MISSION, state.shift + 1) : null;
-  const eduKey = eduFocus ?? String(state.shift);
-  const facName = (id: FacilityId | 'habitat') => t(`fac.${id}` as Key);
+  const ended = state.status !== 'playing';
+  const event = getEvent(MISSION, state.shift);
+  const forecast = getForecast(MISSION, state.shift);
+  const chapter = getChapter(MISSION, state.shift);
+  const chapterStart = MISSION.chapters.find((c) => c.from === state.shift);
+  const capacity = batteryCapacity(MISSION, state.upgrades);
+  const nextUpgrades = outcome.built ? { ...state.upgrades, [outcome.built]: true } : state.upgrades;
+  const nextSolar = state.shift < MISSION.totalShifts ? solarGeneration(MISSION, state.shift + 1, nextUpgrades) : null;
+  const lastBuilt = state.history[state.history.length - 1]?.built ?? null;
+  const facFocus = focus && FACILITY_IDS.includes(focus as FacilityId) ? (focus as FacilityId) : null;
+  // Science briefing: hovered facility/upgrade > current emergency > shift card.
+  const eduKey = focus ? `edu.${focus}` : event ? `edu.ev.${event.id}` : `edu.${state.shift}`;
+  const facName = (id: string) => t(`fac.${id}` as Key);
+  const demandName = (id: string) =>
+    id === 'event' ? t('power.event') : id === 'build' && state.build ? t('power.build', { name: t(`upg.${state.build}` as Key) }) : facName(id);
 
   const onAdvance = () => {
     const next = advanceShift(state, MISSION);
     if (next === state) return;
     setState(next);
     setReport(next.history[next.history.length - 1]);
-    setEduFocus(null);
+    setFocus(null);
   };
 
-  const ended = state.status !== 'playing';
-
   return (
-    <div className={`mission screen ${fx ? '' : 'no-fx'} ${sc.event === 'radiation' && !ended ? 'rad-alert' : ''}`}>
+    <div className={`mission screen ${fx ? '' : 'no-fx'} ${event?.radiation && !ended ? 'rad-alert' : ''}`}>
       {/* ---------- Top bar ---------- */}
       <header className="topbar panel">
         <div className="brand">
           <h1>SUN-01</h1>
           <span className="shift">{t('mission.shift', { n: state.shift, total: MISSION.totalShifts })}</span>
+          <span className="chapter-tag">{t('chapter.label', { n: chapter })} · {t(`chapter.${chapter}.title` as Key)}</span>
           <div className="shift-pips" aria-hidden>
             {MISSION.shifts.map((s) => (
-              <span key={s.shift} className={s.shift < state.shift || (ended && s.shift === state.shift) ? 'done' : s.shift === state.shift ? 'now' : ''} />
+              <span key={s.shift}
+                className={`${s.shift < state.shift || (ended && s.shift === state.shift) ? 'done' : s.shift === state.shift ? 'now' : ''} ${MISSION.chapters.some((c) => c.from === s.shift && s.shift > 1) ? 'ch' : ''} ${getEvent(MISSION, s.shift) ? 'ev' : ''}`} />
             ))}
           </div>
         </div>
         <div className="stats">
-          <Stat name={t('res.energy')} tip={t('res.tip.energy')} k="energy" value={r.energy} next={outcome.after.energy} warnAt={20} critAt={12} />
+          <Stat name={t('res.energy')} tip={t('res.tip.energy')} k="energy" value={r.energy} next={outcome.after.energy} warnAt={20} critAt={12} max={capacity} />
           <Stat name={t('res.oxygen')} tip={t('res.tip.oxygen')} k="oxygen" value={r.oxygen} next={outcome.after.oxygen} warnAt={30} critAt={15} />
           <Stat name={t('res.food')} tip={t('res.tip.food')} k="food" value={r.food} next={outcome.after.food} warnAt={30} critAt={15} />
           <Stat name={t('res.health')} tip={t('res.tip.health')} k="health" value={r.health} next={outcome.after.health} warnAt={70} critAt={40} />
@@ -162,17 +276,33 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
       {/* ---------- Center ---------- */}
       <div className="mission-main">
         <div className="scene-wrap panel">
-          <BaseScene key={`scene-${state.shift}`} facilities={state.facilities} illumination={outcome.illumination} radiation={sc.event === 'radiation'} shift={state.shift} highlight={eduFocus} />
+          <BaseScene key={`scene-${state.shift}`} facilities={outcome.ran} illumination={outcome.illumination}
+            radiation={!!event?.radiation} shift={state.shift} highlight={facFocus} upgrades={state.upgrades}
+            building={state.build} fresh={lastBuilt} battery={Math.min(1, r.energy / capacity)} dust={event?.id === 'dust' && state.choice !== 'eva'} />
           {!ended && (
-            <div className="shift-banner" key={`banner-${state.shift}`} aria-hidden>
-              <span>{t('banner.shift', { n: state.shift })}</span>
-              <small>{t(sc.event === 'radiation' ? 'banner.radiation' : sc.event === 'warning' ? 'banner.warning' : 'banner.normal')}</small>
+            <div className={`shift-banner ${chapterStart ? 'chapter' : ''}`} key={`banner-${state.shift}`} aria-hidden>
+              {chapterStart ? (
+                <>
+                  <small>{t('chapter.label', { n: chapterStart.id })}</small>
+                  <span>{t(`chapter.${chapterStart.id}.title` as Key)}</span>
+                  <em>{t(`chapter.${chapterStart.id}.goal` as Key)}</em>
+                </>
+              ) : (
+                <>
+                  <span>{t('banner.shift', { n: state.shift })}</span>
+                  <small>{event ? t(`ev.${event.id}.title` as Key) : t('banner.normal')}</small>
+                </>
+              )}
             </div>
           )}
-          {sc.event && !ended && (
-            <div className={`event-strip ${sc.event}`} role="status">
-              <b>{t(sc.event === 'radiation' ? 'strip.radiationTitle' : 'strip.warningTitle')}</b>{' '}
-              {sc.event === 'radiation' ? t('strip.radiation') : t('strip.warning', { next: state.shift + 1 })}
+          {event && !ended && (
+            <EventCard state={state} ev={event} onChoose={(id) => setState(chooseOption(state, MISSION, id))} />
+          )}
+          {forecast && !ended && (
+            <div className={`event-strip ${forecast.radiation ? 'radiation-fc' : 'warning'}`} role="status">
+              <b>{t('ev.forecastTitle')}</b>{' '}
+              {t('ev.forecast', { title: t(`ev.${forecast.id}.title` as Key), hint: t(`ev.${forecast.id}.hint` as Key, { dmg: forecast.radiation?.damage ?? 0 }) })}
+              <span className="badge-data game">{t('ev.badge')}</span>
             </div>
           )}
           <div className="scene-overlay">
@@ -182,7 +312,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
               <div className="sun-calc">
                 <span className="badge-data measured" title={t('chip.nasaTip')}>{t('chip.nasaBadge')}</span> {t('chip.sunVisible', { pct: Math.round(MISSION.site.averageSunlitFraction * 100) })}
                 {' × '}
-                <span className="badge-data game" title={t('chip.scenarioTip')}>{t('chip.scenarioBadge')}</span> ×{sc.scenarioModifier.toFixed(2)}
+                <span className="badge-data game" title={t('chip.scenarioTip')}>{t('chip.scenarioBadge')}</span> ×{outcome.scenarioModifier.toFixed(2)}
               </div>
             </div>
             <div className="chip">
@@ -195,38 +325,42 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
         <aside className="controls panel" aria-label={t('controls.aria')}>
           <h2>{t('controls.title')}</h2>
 
-          <div className="fac on locked">
-            <div className="title"><span className="led" />{facName('habitat')}</div>
-            <span className="switch-label">{t('controls.alwaysOn')}</span>
+          <div className="fac on locked slim">
+            <div className="title"><span className="led" />{facName('habitat')}<span className="state on">{t('controls.alwaysOn')}</span></div>
             <div className="meta"><span className="cost">{t('controls.cost', { n: MISSION.habitat.energyCost })}</span><span>{t('controls.habitatDesc')}</span></div>
           </div>
 
           {FACILITY_IDS.map((id) => {
             const on = state.facilities[id];
+            const lockedByEvent = !!event && (event.choices.find((c) => c.id === state.choice)?.disable ?? []).includes(id);
+            const forcedOn = isForcedOn(state, MISSION, id);
             const available = isFacilityAvailable(state, MISSION, id);
-            const cfg = MISSION.facilities[id];
             const gain =
-              id === 'oxygen' ? t('gain.oxygen', { n: MISSION.facilities.oxygen.produces })
+              id === 'oxygen' ? t('gain.oxygen', { n: oxygenOutput(MISSION, state.upgrades) })
               : id === 'greenhouse' ? t('gain.food', { n: MISSION.facilities.greenhouse.produces })
-              : id === 'shelter' ? t(sc.event === 'radiation' ? 'gain.shelterNow' : 'gain.shelter')
-              : t(available ? 'gain.lab' : 'gain.labDone');
+              : id === 'shelter' ? t(event?.radiation ? 'gain.shelterNow' : 'gain.shelter')
+              : t(r.research < MISSION.capacity.research ? 'gain.lab' : 'gain.labDone');
             const name = facName(id);
+            const stateLabel = lockedByEvent ? t('controls.locked') : t(on ? 'controls.online' : 'controls.standby');
             return (
-              <div key={id} className={`fac ${on ? 'on' : ''}`} onMouseEnter={() => setEduFocus(id)} onMouseLeave={() => setEduFocus(null)} onFocus={() => setEduFocus(id)} onBlur={() => setEduFocus(null)}>
-                <div className="title"><span className="led" />{name}<span className={`state ${on ? 'on' : ''}`}>{t(on ? 'controls.online' : 'controls.standby')}</span></div>
+              <div key={id} className={`fac ${on && !lockedByEvent ? 'on' : ''} ${lockedByEvent ? 'event-locked' : ''}`}
+                onMouseEnter={() => setFocus(id)} onMouseLeave={() => setFocus(null)} onFocus={() => setFocus(id)} onBlur={() => setFocus(null)}>
+                <div className="title"><span className="led" />{name}<span className={`state ${on && !lockedByEvent ? 'on' : ''}`}>{stateLabel}</span></div>
                 <button
                   className="switch"
                   role="switch"
-                  aria-checked={on}
+                  aria-checked={on && !lockedByEvent}
                   aria-label={t('switch.aria', { name, state: t(on ? 'switch.on' : 'switch.off') })}
-                  title={!on && !available ? t('switch.tipDone') : t(on ? 'switch.tipOn' : 'switch.tipOff', { name })}
-                  disabled={ended || (!on && !available)}
+                  title={lockedByEvent || forcedOn ? t('switch.tipLocked') : !on && !available ? t('switch.tipDone') : t(on ? 'switch.tipOn' : 'switch.tipOff', { name })}
+                  disabled={ended || lockedByEvent || forcedOn || (!on && !available)}
                   onClick={() => setState(toggleFacility(state, MISSION, id))}
                 />
-                <div className="meta"><span className="cost">{t('controls.cost', { n: cfg.energyCost })}</span><span className="gain">{gain}</span></div>
+                <div className="meta"><span className="cost">{t('controls.cost', { n: facilityCost(MISSION, id, state.upgrades) })}</span><span className="gain">{gain}</span></div>
               </div>
             );
           })}
+
+          <UpgradePanel state={state} setState={setState} onFocus={setFocus} />
 
           {warnings.length > 0 && (
             <div className="alerts" role="alert">
@@ -243,11 +377,10 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
             </div>
             <div className="power-row"><span>{t('power.supply', { b: r.energy, s: outcome.solar })}</span><span className="v">{outcome.available}</span></div>
             {outcome.demandBreakdown.map((b) => (
-              <div className="power-row" key={b.id}><span style={{ color: 'var(--muted)' }}>{facName(b.id)}</span><span className="v">−{b.cost}</span></div>
+              <div className="power-row" key={b.id}><span style={{ color: 'var(--muted)' }}>{demandName(b.id)}</span><span className="v">−{b.cost}</span></div>
             ))}
-            <div className="power-row total"><span>{t('power.after')}</span><span className="v" style={{ color: allowed ? 'var(--yellow)' : 'var(--red)' }}>{allowed ? outcome.after.energy : `−${outcome.optionalDeficit}`}</span></div>
+            <div className="power-row total"><span>{t('power.after')}</span><span className="v" style={{ color: outcome.optionalDeficit === 0 ? 'var(--yellow)' : 'var(--red)' }}>{outcome.optionalDeficit === 0 ? outcome.after.energy : `−${outcome.optionalDeficit}`}</span></div>
           </div>
-
         </aside>
       </div>
 
@@ -259,33 +392,38 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
             <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>{t('log.welcome', { shifts: MISSION.totalShifts })}</p>
           ) : (
             <ol>
-              {[...state.history].reverse().map((h) => (
-                <li key={h.shift}>
-                  <b>{t('log.shift', { n: h.shift })}</b>
-                  {t('log.entry', { solar: h.solar, demand: h.demand, o2: signed(h.after.oxygen - h.before.oxygen), food: signed(h.after.food - h.before.food) })}
-                  {h.radiation === 'protected' && t('log.radBlocked')}
-                  {h.radiation === 'exposed' && t('log.radHit', { dmg: MISSION.radiation.healthDamage })}
-                  {h.researchGained > 0 && t('log.research')}
-                </li>
-              ))}
+              {[...state.history].reverse().map((h) => {
+                const ev = h.eventId ? MISSION.events.find((e) => e.id === h.eventId) : undefined;
+                return (
+                  <li key={h.shift}>
+                    <b>{t('log.shift', { n: h.shift })}</b>
+                    {t('log.entry', { solar: h.solar, demand: h.demand, o2: signed(h.after.oxygen - h.before.oxygen), food: signed(h.after.food - h.before.food) })}
+                    {ev && h.choiceId && <span className="log-ev"> · {t(`ev.${ev.id}.${h.choiceId}` as Key)}</span>}
+                    {h.radiation === 'protected' && t('log.radBlocked')}
+                    {(h.radiation === 'exposed' || h.radiation === 'partial') && t('log.radPartial', { dmg: h.radiationDamage })}
+                    {h.researchGained > 0 && t('log.research')}
+                    {h.built && <span className="log-up">{t('log.built', { name: t(`upg.${h.built}` as Key) })}</span>}
+                  </li>
+                );
+              })}
             </ol>
           )}
         </section>
         <section className="edu panel" aria-label={t('edu.aria')}>
           <h2>{t('edu.heading')}</h2>
-          <span className="edu-title">{t(`edu.${eduKey}.title` as Key)}</span>
-          <p>{t(`edu.${eduKey}.text` as Key)}</p>
+          <span className="edu-title">{t(`${eduKey}.title` as Key)}</span>
+          <p>{t(`${eduKey}.text` as Key)}</p>
         </section>
         <div className="advance panel">
           {ended ? (
             <button className="btn btn-primary" onClick={onFinish}>{t('advance.results')}</button>
           ) : (
-            <button className="btn btn-primary" onClick={onAdvance} disabled={!allowed} title={allowed ? t('advance.tip') : t('advance.hintBlocked')}>
+            <button className="btn btn-primary" onClick={onAdvance} disabled={!allowed} title={allowed ? t('advance.tip') : outcome.needsChoice ? t('warn.choiceNeeded') : t('advance.hintBlocked')}>
               {t('advance.btn')}
             </button>
           )}
           <span className="hint">
-            {ended ? t('advance.hintDone') : allowed ? t('advance.hintEnds', { n: state.shift }) : t('advance.hintBlocked')}
+            {ended ? t('advance.hintDone') : allowed ? t('advance.hintEnds', { n: state.shift }) : outcome.needsChoice ? t('ev.decide') : t('advance.hintBlocked')}
           </span>
         </div>
       </div>
@@ -308,11 +446,22 @@ function ShiftReportModal({ report, state, onClose, onResults }: {
   const { t } = useI18n();
   const keys: (keyof Resources)[] = ['energy', 'oxygen', 'food', 'health', 'research'];
   const ended = state.status !== 'playing';
+  const chapterDone = state.status !== 'failed' ? MISSION.chapters.find((c) => c.to === report.shift) : undefined;
+  const highlights: { cls: string; text: string }[] = [];
+  if (report.built) highlights.push({ cls: 'up', text: t('report.upgrade', { name: t(`upg.${report.built}` as Key) }) });
+  if (report.researchGained) highlights.push({ cls: 'sci', text: t('report.milestone', { n: report.after.research, max: MISSION.capacity.research }) });
+  if (chapterDone) highlights.push({ cls: 'ch', text: t('report.chapterDone', { n: chapterDone.id, title: t(`chapter.${chapterDone.id}.title` as Key) }) });
+  if (report.radiation === 'protected') highlights.push({ cls: 'safe', text: t('exp.radSafe') });
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="report-title">
       <div className="modal panel">
         <span className="tag">{t('report.tag')}</span>
         <h2 id="report-title">{t('report.title', { n: report.shift })}</h2>
+        {highlights.length > 0 && (
+          <div className="highlights">
+            {highlights.map((h, i) => <span key={i} className={`hl ${h.cls}`}>{h.text}</span>)}
+          </div>
+        )}
         <div className="deltas">
           {keys.map((k) => (
             <div key={k}>

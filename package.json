@@ -9,7 +9,8 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "preview": "vite preview",
-    "build:single": "npm run build && node tools/make-single-file.mjs"
+    "build:single": "npm run build && node tools/make-single-file.mjs",
+    "analyze": "node --max-old-space-size=6144 node_modules/vitest/vitest.mjs run --config vitest.analyze.config.ts"
   },
   "dependencies": {
     "react": "^18.3.1",

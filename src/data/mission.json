@@ -1,6 +1,6 @@
 {
   "missionName": "SUN-01 Lunar Research Outpost",
-  "totalShifts": 8,
+  "totalShifts": 12,
   "initial": {
     "energy": 55,
     "oxygen": 65,
@@ -13,11 +13,11 @@
     "oxygen": 100,
     "food": 100,
     "health": 100,
-    "research": 3
+    "research": 4
   },
   "solar": {
     "basePeakOutput": 30,
-    "note": "Shift sunlight = min(1, NASA site average sunlit fraction (src/data/site.json) x fictional scenario modifier). Solar generation = round(basePeakOutput x shift sunlight). Scenario modifiers are training values, NOT NASA observations."
+    "note": "Shift sunlight = min(1, NASA site average sunlit fraction (src/data/site.json) x fictional scenario modifier). Solar generation = round(peak output x sunlight x event multiplier); the Solar Array Upgrade raises peak output. Scenario modifiers, events and upgrades are fictional training values, NOT NASA observations."
   },
   "habitat": {
     "energyCost": 12
@@ -42,48 +42,188 @@
       "energyCost": 8
     }
   },
-  "radiation": {
-    "healthDamage": 35
+  "upgrades": {
+    "solar": {
+      "energyCost": 20,
+      "bonus": 10
+    },
+    "oxygen": {
+      "energyCost": 12,
+      "energyCostAfter": 4,
+      "producesAfter": 22
+    },
+    "battery": {
+      "energyCost": 10,
+      "bonus": 40
+    }
   },
+  "upgradeUnlockShift": 2,
   "failure": {
     "minHealth": 40
   },
+  "chapters": [
+    {
+      "id": 1,
+      "from": 1,
+      "to": 4
+    },
+    {
+      "id": 2,
+      "from": 5,
+      "to": 8
+    },
+    {
+      "id": 3,
+      "from": 9,
+      "to": 12
+    }
+  ],
+  "events": [
+    {
+      "id": "o2fault",
+      "shift": 3,
+      "warnShift": 2,
+      "choices": [
+        {
+          "id": "repair",
+          "energyCost": 10
+        },
+        {
+          "id": "patch",
+          "oxygenProdMult": 0.4
+        }
+      ]
+    },
+    {
+      "id": "storm1",
+      "shift": 5,
+      "warnShift": 4,
+      "radiation": {
+        "damage": 35
+      },
+      "choices": [
+        {
+          "id": "shelter",
+          "useShelter": true,
+          "enable": [
+            "shelter"
+          ],
+          "disable": [
+            "lab"
+          ]
+        },
+        {
+          "id": "work",
+          "radiationDamage": 20
+        }
+      ]
+    },
+    {
+      "id": "dust",
+      "shift": 7,
+      "warnShift": 6,
+      "choices": [
+        {
+          "id": "eva",
+          "health": -10
+        },
+        {
+          "id": "wait",
+          "solarMult": 0.3
+        }
+      ]
+    },
+    {
+      "id": "pump",
+      "shift": 9,
+      "warnShift": 8,
+      "choices": [
+        {
+          "id": "replace",
+          "energyCost": 8
+        },
+        {
+          "id": "harvest",
+          "food": 10,
+          "disable": [
+            "greenhouse"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "storm2",
+      "shift": 11,
+      "warnShift": 10,
+      "radiation": {
+        "damage": 45
+      },
+      "choices": [
+        {
+          "id": "shelter",
+          "useShelter": true,
+          "enable": [
+            "shelter"
+          ],
+          "disable": [
+            "lab"
+          ]
+        },
+        {
+          "id": "work",
+          "radiationDamage": 25
+        }
+      ]
+    }
+  ],
   "shifts": [
     {
       "shift": 1,
-      "scenarioModifier": 1.02
+      "scenarioModifier": 1.1
     },
     {
       "shift": 2,
-      "scenarioModifier": 0.9
+      "scenarioModifier": 1.03
     },
     {
       "shift": 3,
-      "scenarioModifier": 0.63,
-      "event": "warning"
+      "scenarioModifier": 0.88
     },
     {
       "shift": 4,
-      "scenarioModifier": 0.3,
-      "event": "radiation"
+      "scenarioModifier": 0.71
     },
     {
       "shift": 5,
-      "scenarioModifier": 0.4
+      "scenarioModifier": 0.53
     },
     {
       "shift": 6,
-      "scenarioModifier": 0.74,
-      "event": "warning"
+      "scenarioModifier": 0.38
     },
     {
       "shift": 7,
-      "scenarioModifier": 1.09,
-      "event": "radiation"
+      "scenarioModifier": 0.82
     },
     {
       "shift": 8,
+      "scenarioModifier": 0.98
+    },
+    {
+      "shift": 9,
       "scenarioModifier": 0.68
+    },
+    {
+      "shift": 10,
+      "scenarioModifier": 0.43
+    },
+    {
+      "shift": 11,
+      "scenarioModifier": 0.36
+    },
+    {
+      "shift": 12,
+      "scenarioModifier": 0.63
     }
   ]
 }

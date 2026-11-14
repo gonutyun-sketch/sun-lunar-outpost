@@ -100,7 +100,7 @@ export function HowToPlay({ onBack, onStart }: { onBack: () => void; onStart: ()
             <tr><td>{t('how.habitatRow')}</td><td>{MISSION.habitat.energyCost}</td><td>{t('how.eff.habitat')}</td></tr>
             <tr><td>{t('fac.oxygen')}</td><td>{f.oxygen.energyCost}</td><td>{t('how.eff.oxygen', { prod: f.oxygen.produces, use: MISSION.crew.oxygenUse })}</td></tr>
             <tr><td>{t('fac.greenhouse')}</td><td>{f.greenhouse.energyCost}</td><td>{t('how.eff.greenhouse', { prod: f.greenhouse.produces, use: MISSION.crew.foodUse })}</td></tr>
-            <tr><td>{t('fac.shelter')}</td><td>{f.shelter.energyCost}</td><td>{t('how.eff.shelter', { dmg: MISSION.radiation.healthDamage })}</td></tr>
+            <tr><td>{t('fac.shelter')}</td><td>{f.shelter.energyCost}</td><td>{t('how.eff.shelter', { dmg: MISSION.events.find((e) => e.radiation)?.radiation?.damage ?? 0 })}</td></tr>
             <tr><td>{t('fac.lab')}</td><td>{f.lab.energyCost}</td><td>{t('how.eff.lab', { max: research })}</td></tr>
           </tbody>
         </table>
@@ -109,6 +109,19 @@ export function HowToPlay({ onBack, onStart }: { onBack: () => void; onStart: ()
         <h2>{t('how.powerH')}</h2>
         <p>{t('how.power1', { cap: MISSION.capacity.energy })}</p>
         <p>{t('how.power2', { pct: Math.round(MISSION.site.averageSunlitFraction * 100) })}</p>
+      </section>
+      <section className="panel">
+        <h2>{t('how.chH')}</h2>
+        <p>{t('how.ch')}</p>
+      </section>
+      <section className="panel">
+        <h2>{t('how.upgH')}</h2>
+        <p>{tr('how.upg', { n: MISSION.upgradeUnlockShift })}</p>
+      </section>
+      <section className="panel">
+        <h2>{t('how.evH')}</h2>
+        <p>{tr('how.ev')}</p>
+        <ul>{MISSION.events.map((e) => <li key={e.id}>{t('results.shiftN', { n: e.shift })} · {t(`ev.${e.id}.title` as Key)} <span className="badge-data game">{t('ev.badge')}</span></li>)}</ul>
       </section>
       <section className="panel">
         <h2>{t('how.winH')}</h2>
@@ -169,7 +182,7 @@ export function Credits({ onBack }: { onBack: () => void }) {
           ))}
         </div>
         <p>
-          {tr('cr.why1', { alt: siteSolar.alt, site: siteSolar.site, pct: Math.round((1 - siteSolar.alt / siteSolar.site) * 100) })}{' '}
+          {tr('cr.why1', { n: MISSION.totalShifts, alt: siteSolar.alt, site: siteSolar.site, pct: Math.round((1 - siteSolar.alt / siteSolar.site) * 100) })}{' '}
           <span className="badge-data game">{t('cr.gameCalc')}</span>
         </p>
         <p>{t('cr.why2')}</p>
@@ -180,6 +193,7 @@ export function Credits({ onBack }: { onBack: () => void }) {
         <p>
           <span className="badge-data game">{t('cr.scenarioBadge')}</span>{' '}
           {tr('cr.scenario', {
+            n: MISSION.totalShifts,
             min: Math.min(...mods).toFixed(2),
             max: Math.max(...mods).toFixed(2),
             avg: Math.round((mods.reduce((a, m) => a + m, 0) / mods.length) * site.averageSunlitFraction * 100),
@@ -254,14 +268,14 @@ function HistoryGraph({ state }: { state: GameState }) {
         {Array.from({ length: n + 1 }, (_, i) => (
           <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="#8ea3bd">{i === 0 ? t('results.start') : t('results.s', { n: i })}</text>
         ))}
-        {MISSION.shifts.filter((s) => s.event === 'radiation').map((s) => {
+        {MISSION.events.filter((e) => e.radiation).map((s) => {
           const h = state.history.find((r) => r.shift === s.shift);
-          const col = !h ? '#56606f' : h.radiation === 'exposed' ? '#ff6b7a' : '#6CE0B2';
+          const col = !h ? '#56606f' : h.radiation === 'protected' ? '#6CE0B2' : '#ff6b7a';
           return (
             <g key={s.shift}>
               <rect x={x(s.shift - 1)} y={T} width={x(s.shift) - x(s.shift - 1)} height={H - T - B} fill={col} opacity="0.08" />
               <text x={(x(s.shift - 1) + x(s.shift)) / 2} y={T + 12} textAnchor="middle" fontSize="10" fill={col}>
-                ☢ {!h ? '' : t(h.radiation === 'exposed' ? 'results.exposed' : 'results.sheltered')}
+                ☢ {!h ? '' : t(h.radiation === 'protected' ? 'results.sheltered' : h.radiation === 'partial' ? 'results.worked' : 'results.exposed')}
               </text>
             </g>
           );
@@ -329,6 +343,25 @@ export function Results({ state, onRestart, onMenu }: { state: GameState; onRest
           <HistoryGraph state={state} />
         </section>
       </div>
+      <section className="decisions panel">
+        <div>
+          <h2>{t('results.decisionsH')}</h2>
+          <ul>
+            {state.history.filter((h) => h.eventId && h.choiceId).map((h) => (
+              <li key={h.shift}><span className="when">{t('results.shiftN', { n: h.shift })}</span> {t(`ev.${h.eventId}.title` as Key)} → <b>{t(`ev.${h.eventId}.${h.choiceId}` as Key)}</b></li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h2>{t('results.upgradesH')}</h2>
+          <ul>
+            {state.history.filter((h) => h.built).map((h) => (
+              <li key={h.shift}><span className="when">{t('results.shiftN', { n: h.shift })}</span> <b>{t(`upg.${h.built}` as Key)}</b></li>
+            ))}
+            {!state.history.some((h) => h.built) && <li className="muted">{t('results.noUpgrades')}</li>}
+          </ul>
+        </div>
+      </section>
       <section className="takeaways panel">
         <h2>{t('results.teachH')}</h2>
         <ol>{lessons.map((l, i) => <li key={i}>{l}</li>)}</ol>

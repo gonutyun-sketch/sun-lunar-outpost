@@ -1,4 +1,4 @@
-import type { Facilities, FacilityId } from '../game/types';
+import type { Facilities, FacilityId, UpgradeId, Upgrades } from '../game/types';
 import { useI18n } from '../i18n/I18n';
 
 /** Deterministic pseudo-random stars so the scene is identical on every render. */
@@ -16,7 +16,18 @@ interface Props {
   shift: number;
   /** Facility whose control card is hovered/focused — highlighted in the scene. */
   highlight?: FacilityId | null;
+  upgrades?: Upgrades;
+  /** Upgrade under construction this shift (drawn as a dashed outline). */
+  building?: UpgradeId | null;
+  /** Upgrade completed last shift (celebration glow). */
+  fresh?: UpgradeId | null;
+  /** Battery charge 0..1. */
+  battery?: number;
+  /** Dust coating the solar panels this shift. */
+  dust?: boolean;
 }
+
+const NONE: Upgrades = { solar: false, oxygen: false, battery: false };
 
 /** Ground anchor (x centre, half-width) of each facility, for highlight rings and power cables. */
 const SPOTS: Record<FacilityId, { x: number; w: number }> = {
@@ -43,7 +54,8 @@ const Led = ({ x, y, on }: { x: number; y: number; on: boolean }) => (
   <circle cx={x} cy={y} r={4} fill={on ? '#6CE0B2' : '#3a4a60'} className={on ? 'blink' : undefined} />
 );
 
-export function BaseScene({ facilities: f, illumination, radiation, shift, highlight }: Props) {
+export function BaseScene({ facilities: f, illumination, radiation, shift, highlight, upgrades = NONE, building = null, fresh = null, battery = 0.5, dust = false }: Props) {
+  const fx = (id: UpgradeId) => (fresh === id ? 'upg-fresh' : undefined);
   const { t } = useI18n();
   const sunY = 300 - illumination * 60; // the Sun skims the polar horizon
   const panelGlow = Math.max(0.15, illumination);
@@ -117,6 +129,24 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
       {/* Low-light dimming of the terrain: darker shifts are visibly darker */}
       <rect width="1000" height="520" fill="#02040a" opacity={(1 - illumination) * 0.5} className="panel-glow" />
 
+      {/* Battery bank: charge level, more cells after the Battery Upgrade */}
+      <g transform="translate(372 452)" className={fx('battery')}>
+        {(upgrades.battery || building === 'battery') && (
+          <rect x={-4} y={-4} width={(upgrades.battery ? 5 : 3) * 16 + 8 + (building === 'battery' && !upgrades.battery ? 32 : 0)} height={30} rx={4}
+            fill="none" stroke="#F4CA65" strokeDasharray={upgrades.battery ? undefined : '4 3'} strokeOpacity={upgrades.battery ? 0.7 : 0.9} />
+        )}
+        {Array.from({ length: upgrades.battery ? 5 : 3 }, (_, i) => {
+          const cells = upgrades.battery ? 5 : 3;
+          const level = Math.max(0, Math.min(1, battery * cells - i));
+          return (
+            <g key={i}>
+              <rect x={i * 16} y={0} width={12} height={22} rx={2} fill="#1d2b40" stroke="#8d97a6" />
+              <rect x={i * 16 + 2} y={2 + 18 * (1 - level)} width={8} height={18 * level} rx={1} fill="#F4CA65" opacity="0.9" />
+            </g>
+          );
+        })}
+      </g>
+
       {/* Small rover parked by the habitat */}
       <g transform="translate(470 474)">
         <rect x="0" y="0" width="34" height="10" rx="3" fill="#c9d0da" />
@@ -154,6 +184,18 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
               ))}
               <line x1={x + 24} y1={250} x2={x + 24} y2={342} stroke="#2f6a99" />
               <rect x={x} y={250} width={48} height={92} rx={2} fill="#F4CA65" opacity={panelGlow * 0.35} className="panel-glow" />
+              {upgrades.solar && (
+                <g className={fx('solar')}>
+                  <rect x={x + 22} y={206} width={4} height={44} fill="#c9a24a" />
+                  <rect x={x} y={200} width={48} height={46} rx={2} fill="url(#cell)" stroke="#F4CA65" strokeWidth="1.5" />
+                  {[0, 1, 2].map((r) => <line key={r} x1={x} y1={200 + r * 15.3} x2={x + 48} y2={200 + r * 15.3} stroke="#2f6a99" />)}
+                  <rect x={x} y={200} width={48} height={46} rx={2} fill="#F4CA65" opacity={panelGlow * 0.35} />
+                </g>
+              )}
+              {building === 'solar' && !upgrades.solar && (
+                <rect x={x} y={200} width={48} height={46} rx={2} fill="none" stroke="#F4CA65" strokeDasharray="4 3" className="blink" />
+              )}
+              {dust && <rect x={x} y={upgrades.solar ? 200 : 250} width={48} height={upgrades.solar ? 142 : 92} rx={2} fill="#8a7d6a" opacity="0.6" />}
             </g>
           );
         })}
@@ -182,6 +224,16 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
         <rect x={376} y={358} width={22} height={6} fill={f.oxygen ? '#56C7F2' : '#56606f'} />
         <path d="M364 380 H372" stroke="#8d97a6" strokeWidth="4" />
         {f.oxygen && <circle cx={366} cy={360} r={40} fill="#56C7F2" opacity="0.12" filter="url(#soft)" />}
+        {upgrades.oxygen && (
+          <g className={fx('oxygen')}>
+            <rect x={406} y={350} width={20} height={54} rx={10} fill="url(#hull)" stroke="#6CE0B2" strokeWidth="1.5" />
+            <rect x={409} y={370} width={14} height={5} fill={f.oxygen ? '#6CE0B2' : '#56606f'} />
+            <path d="M402 384 H406" stroke="#8d97a6" strokeWidth="3" />
+          </g>
+        )}
+        {building === 'oxygen' && !upgrades.oxygen && (
+          <rect x={406} y={350} width={20} height={54} rx={10} fill="none" stroke="#F4CA65" strokeDasharray="4 3" className="blink" />
+        )}
         <Led x={347} y={334} on={f.oxygen} />
         <Label x={366} y={438} text={t('scene.oxygen')} on={f.oxygen} />
       </g>

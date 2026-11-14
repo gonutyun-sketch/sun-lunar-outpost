@@ -26,36 +26,26 @@ src/game/config.ts      Loads mission.json as MissionConfig
 src/game/engine.ts      PURE simulation: simulateShift, advanceShift, getWarnings, computeScore
 src/game/debrief.ts     Results text + 3 takeaways
 src/game/engine.test.ts Unit tests (incl. a reference winning plan = 95/A)
-src/game/balance.test.ts Strategy tests + exhaustive decision-path analysis (prints [balance] line)
+src/game/analysis.ts    Balance bots: bestPlay (exact DP), sensiblePolicy, randomPolicy, simulate (seeded)
+src/game/balance.test.ts Strategy/balance tests (sensible bot wins, no-upgrade fails, every choice viable, random < 15%)
+tools/best-play.test.ts Exact best-play search — run with `npm run analyze` (~4 min, 6 GB RAM)
 src/ui/MissionScreen.tsx Top bar, scene, controls, power budget, log, shift report modal
 src/ui/BaseScene.tsx    SVG lunar base
 src/ui/Screens.tsx      Starfield, MainMenu, HowToPlay, Credits, Results (+ graph)
 src/App.tsx             Screen routing, effects toggle
 ```
 
-## Rules (GDD v1.0)
-Per shift, in `simulateShift`:
-1. sunlight = min(1, site.averageSunlitFraction (0.88444, NASA) × scenarioModifier[shift] (fictional)); solar = round(30 × sunlight) (float-safe, .5 up) → 27,24,17,8,11,20,29,18
-2. available = min(100, battery + solar)
-3. demand = 12 (habitat) + oxygen 7 + greenhouse 6 + shelter 7 + lab 8 (enabled only)
-4. available < 12 → habitat power failure → mission FAILED ('power')
-5. demand > available → turn blocked (UI shows deficit), state unchanged
-6. battery = available − demand
-7. oxygen = clamp(o + 20·on − 14, 0..100); food = clamp(f + 16·on − 12, 0..100)
-8. Shift 4 & 7 radiation: shelter on → protected, else health −35
-9. lab on & research < 3 → +1 (lab auto-switches off at 3)
-10. fail if oxygen ≤ 0, food ≤ 0, health < 40. After shift 8: research 3 → success else partial.
-Score: survival 40 (success/partial) + 10/milestone + round(20·health/100) + round(10·min(battery,30)/30).
-
-## Deployment (not done yet — needs the team's accounts)
-Option A — GitHub Pages (workflow already in .github/workflows/deploy.yml):
-1. Create an empty public repo on github.com (e.g. sun-lunar-outpost), no README.
-2. `git remote add origin https://github.com/<user>/sun-lunar-outpost.git`
-3. `git push -u origin main`
-4. Repo Settings → Pages → Source: "GitHub Actions". The workflow runs typecheck + tests + build and publishes.
-5. URL: https://<user>.github.io/sun-lunar-outpost/ → put it in README "Live demo".
-Option B — fastest, no Git: `npm run build`, then drag the `dist/` folder onto https://app.netlify.com/drop.
-(vite base is './', so the build works under any sub-path.)
+## Rules (v2 — see src/game/engine.ts simulateShift)
+Per shift:
+1. sunlight = min(1, NASA site avg 0.88444 × fictional scenarioModifier[shift]); solar = round((30 + solar upgrade 10) × sunlight × event solarMult)
+2. capacity = 100 (+40 with Battery upgrade); available = min(capacity, battery + solar)
+3. demand = habitat 12 + running facilities (oxygen 7, or 4 upgraded; greenhouse 6; shelter 7; lab 8) + emergency energyCost + upgrade construction cost
+4. available < 12 → mission FAILED (power). demand > available → turn blocked. Emergency shift without a decision → turn blocked.
+5. oxygen += (20, or 22 upgraded) × oxygenProdMult − 14; food += 16 (greenhouse) − 12 + choice.food; clamp 0..100
+6. radiation events: "shelter" choice locks shelter ON + lab OFF → protected; "work" → −radiationDamage; no decision impossible (blocked)
+7. lab +1 research (goal 4). Upgrade queued this shift becomes active next shift.
+8. fail: oxygen ≤ 0, food ≤ 0, health < 40, habitat power. After shift 12: research 4 → success else partial.
+Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(battery,30)/30).
 
 ## Next tasks for the next AI
 1. After deployment: add URL to README, run a full playthrough on the live URL.
@@ -63,6 +53,8 @@ Option B — fastest, no Git: `npm run build`, then drag the `dist/` folder onto
 3. Submission materials.
 
 ## Cautions
+- Rebalancing: change src/data/mission.json, then `npm test` (fast bots) and `npm run analyze` (exact best). Keep random success < 15 % and every emergency choice viable.
+- New emergency = add to mission.json events + `ev.<id>.*` and `edu.ev.<id>.*` keys in en.ts/ko.ts.
 - Never hard-code UI text in components: add it to src/i18n/en.ts + ko.ts and use t('key'). Keep {placeholders} identical (tested).
 - Avoid Korean particles (을/를, 이/가) directly after {number} placeholders — use 만큼 or rephrase.
 - Keep engine pure (no React imports). Any rule change → update engine + balance tests.

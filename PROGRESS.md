@@ -8,6 +8,7 @@ _Last updated: 2026-11-14 (Phase 5)_
 | 4 | NASA LRO/LOLA illumination (0.88444) in solar formula, Science & Credits | ✅ Done (approved) |
 | 5 | Science clarity, strategy testing, visual polish, deploy prep | ✅ Done (awaiting review) |
 | 5b | Korean / English localisation (default KO, switch anytime, saved) | ✅ Done |
+| 7 | Gameplay v2: 12 shifts / 3 chapters, 3 upgrades, 5 interactive emergencies, rebalance | ✅ Done (awaiting play-test review) |
 | 6 | Public deployment, final QA, submission | ⏳ Needs GitHub/hosting account action by the team |
 
 ## Phase 5 delivered
@@ -31,6 +32,23 @@ Random-legal-choice player outcome (exact, all paths): success 45.0%, partial 12
 - Kept in original form on purpose: NASA product/dataset IDs, paper citation, URLs, file names, formula functions (min/round), tech/font names, ISS/LED acronyms, game title "SUN: Lunar Outpost".
 - Font: Noto Sans KR added (Google Fonts) + `word-break: keep-all` for Korean.
 
+## Gameplay v2 (2026-11-14)
+Diagnosis of v1: 4 on/off switches with an arithmetic optimum; only 2 radiation alerts (always "shelter on"); no progression; ~5 min; random clicking won 45%.
+
+Added (data in src/data/mission.json, rules in src/game/engine.ts):
+- **12 shifts, 3 chapters** (1–4 establish, 5–8 expand, 9–12 escalation); research goal 4 (score scales 30 × r/4).
+- **Upgrades** (from shift 2, one per shift, energy paid now, active next shift): Solar +10 peak (cost 20), Oxygen recycler 7→4 energy & +20→+22 O₂ (cost 12), Battery 100→140 (cost 10). Drawn on the base (2nd panel row, 3rd tank, bigger battery bank).
+- **5 fictional emergencies**, each forecast one shift ahead, each with 2 choices; the shift cannot run until the player decides: O₂ fault (repair −10 energy / patch 40% output), storm 1 (shelter: shelter ON + lab closed / work: −20 health), dust (EVA −10 health / stay inside: solar ×0.3), pump (replace −8 energy / harvest +10 food, greenhouse off), major storm (shelter / work −25 health).
+- Feedback: chapter banners, decision cards, forecast strip, ONLINE/LOCKED states, report highlights (upgrade online, research milestone n/4, chapter complete, sheltered), decisions & upgrades on the results screen.
+- Rebalance: scenario modifiers (fictional) raised by +0.08 and battery capacity kept at 100 after testing variants.
+
+Balance evidence (src/game/balance.test.ts + `npm run analyze`):
+- Exact best play: **100/100** (7.66 M states searched; expert plan builds Solar + Oxygen, shelters both storms, harvests early).
+- "Sensible novice" bot (simple rules) + Solar upgrade: success, 90 (A). Same bot **without upgrades fails**. All three upgrades: success.
+- Every emergency choice still allows success (scores 86–94) → no trap options, real trade-offs.
+- No constant strategy wins; everything-ON fails on power.
+- Random clicking: success 9.2 %, fail 84 % (v1: 45 % success).
+
 ## Remaining (priority order)
 1. **P0** Create GitHub repo, push, enable Pages (steps in HANDOFF.md) → public demo URL, add to README.
 2. **P1** Team decision on difficulty (above). If changed: update mission.json + tests.
@@ -42,6 +60,7 @@ Random-legal-choice player outcome (exact, all paths): success 45.0%, partial 12
 - Control panel may still scroll slightly at 1366×768 when 2+ warnings are shown (all critical warnings are now above the fold).
 - Mid-transition screenshots can show the fading shift banner (cosmetic).
 
-## Last test results (2026-11-14, after localisation)
-- `npm run typecheck` ✅ · `npm test` ✅ 35/35 (3 files, incl. 5 i18n tests: key parity, placeholder parity, no empty KO strings) · `npm run build` ✅
-- Browser 1366×768: fresh visit defaults to Korean; full 8 shifts in Korean → 임무 성공 95 A; full 8 shifts in English → Mission Successful 95 A (identical); switching KO→EN at Shift 4 kept shift, resources (66,83,34,100,0/3), switches and log; reload restored English; warnings/deficit block/failure texts verified in Korean; leak scan: no English on KO screens except ISS/LED and the intentionally-kept citation/URL/product names on Credits; no Korean on EN screens; no horizontal scroll.
+## Last test results (2026-11-14, gameplay v2)
+- `npm run typecheck` ✅ · `npm test` ✅ 33/33 (engine 19, balance 9, i18n 5) · `npm run build` ✅ · `npm run analyze` best = 100
+- Browser 1366×768 (Korean): expert plan through the real UI → 임무 성공 100/100 A (matches engine); decisions/upgrades listed on results; chapter/upgrade/milestone highlights shown.
+- Browser (English): careless play (defaults, first options, no upgrades) → Mission Failed, food, Shift 6, F 30, with lesson. No Korean leaks on EN screens; no console errors.
