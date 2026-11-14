@@ -88,7 +88,7 @@ export default function App() {
 
   return (
     <div className={fx ? '' : 'no-fx'}>
-      {screen !== 'mission' && screen !== 'explore' && <Starfield />}
+      {(screen === 'how' || screen === 'credits' || screen === 'results') && <Starfield />}
       <Guard onError={recover} resetKey={screen}>
         {screen === 'menu' && (
           <MainMenu
@@ -98,6 +98,7 @@ export default function App() {
             notice={notice === 'invalid' ? t('save.invalid') : notice === 'resumed' ? t('save.resumed') : null}
             onHow={() => setScreen('how')}
             onCredits={() => setScreen('credits')}
+            fx={fx}
           />
         )}
         {screen === 'how' && <HowToPlay onBack={() => setScreen('menu')} onStart={saved && game.status === 'playing' ? continueGame : newGame} />}

@@ -4,6 +4,8 @@ import { missionSummary, missionTitle, takeaways } from '../game/debrief';
 import type { GameState, Resources } from '../game/types';
 import { LangToggle, useI18n } from '../i18n/I18n';
 import type { Key } from '../i18n/translate';
+import type { OutpostState } from '../art/outpost';
+import { BaseScene } from './BaseScene';
 
 /* ---------------- Animated background ---------------- */
 const BG_STARS = Array.from({ length: 140 }, (_, i) => {
@@ -46,38 +48,49 @@ export function Starfield() {
 /* ---------------- Main menu ---------------- */
 export interface SaveSlot { shift: number; total: number; finished: boolean }
 
-export function MainMenu({ onStart, onHow, onCredits, onContinue, slot, notice }: {
+const menuOutpost: OutpostState = {
+  facilities: { oxygen: true, greenhouse: true, shelter: false, lab: true },
+  sunlight: 0.91,
+  battery: 0.72,
+  upgrades: { solar: false, oxygen: false, battery: false },
+};
+
+export function MainMenu({ onStart, onHow, onCredits, onContinue, slot, notice, fx }: {
   onStart: () => void; onHow: () => void; onCredits: () => void;
   /** Present when a saved game exists. */
   onContinue?: () => void; slot?: SaveSlot | null;
   /** One-off message about the save (cleared damaged save, interrupted expedition). */
   notice?: string | null;
+  fx: boolean;
 }) {
   const { t } = useI18n();
   return (
     <div className="screen menu">
       <LangToggle className="menu-lang" />
-      <div className="kicker">{t('menu.kicker')}</div>
-      <h1><span className="sun">SUN</span>: Lunar Outpost</h1>
-      {t('menu.titleSub') && <div className="title-sub">{t('menu.titleSub')}</div>}
-      <p className="sub">{t('menu.sub')}</p>
-      <div className="menu-buttons">
-        {onContinue && slot ? (
-          <>
-            <button className="btn btn-primary btn-continue" onClick={onContinue} autoFocus>
-              {t('save.continue')}
-              <small>{slot.finished ? t('save.slotDone') : t('save.slot', { n: slot.shift, total: slot.total })}</small>
-            </button>
-            <button className="btn" onClick={onStart}>{t('save.newGame')}</button>
-          </>
-        ) : (
-          <button className="btn btn-primary" onClick={onStart} autoFocus>{t('menu.start')}</button>
-        )}
-        <button className="btn" onClick={onHow}>{t('menu.how')}</button>
-        <button className="btn" onClick={onCredits}>{t('menu.credits')}</button>
+      <div className="menu-art"><BaseScene state={menuOutpost} fx={fx} /></div>
+      <div className="menu-content">
+        <div className="kicker">{t('menu.kicker')}</div>
+        <h1><span className="sun">SUN:</span> Lunar Outpost</h1>
+        {t('menu.titleSub') && <div className="title-sub">{t('menu.titleSub')}</div>}
+        <p className="sub">{t('menu.sub')}</p>
+        <div className="menu-buttons">
+          {onContinue && slot ? (
+            <>
+              <button className="btn btn-primary btn-continue" onClick={onContinue} autoFocus>
+                {t('save.continue')}
+                <small>{slot.finished ? t('save.slotDone') : t('save.slot', { n: slot.shift, total: slot.total })}</small>
+              </button>
+              <button className="btn" onClick={onStart}>{t('save.newGame')}</button>
+            </>
+          ) : (
+            <button className="btn btn-primary" onClick={onStart} autoFocus>{t('menu.start')}</button>
+          )}
+          <button className="btn" onClick={onHow}>{t('menu.how')}</button>
+          <button className="btn" onClick={onCredits}>{t('menu.credits')}</button>
+        </div>
+        {notice && <p className="save-notice" role="status">{notice}</p>}
+        <div className="menu-foot">{t('menu.foot')}<br /><span className="save-note">{t('save.note')}</span></div>
       </div>
-      {notice && <p className="save-notice" role="status">{notice}</p>}
-      <div className="menu-foot">{t('menu.foot')}<br /><span className="save-note">{t('save.note')}</span></div>
     </div>
   );
 }
