@@ -4,6 +4,7 @@
  * NASA site texts come straight from src/data/site.json so they never drift from the data record.
  */
 import site from '../data/site.json';
+import { enLearn } from './en.learn';
 
 export const en = {
   // Language switch
@@ -30,8 +31,8 @@ export const en = {
   // Save / continue
   'save.continue': 'CONTINUE',
   'save.newGame': 'NEW GAME',
-  'save.slot': 'Shift {n}/{total} · saved automatically',
-  'save.slotDone': 'Mission finished · view results',
+  'save.slot': '{diff} · Shift {n}/{total} · saved automatically',
+  'save.slotDone': '{diff} · Mission finished · view results',
   'save.confirmTitle': 'Start a new game?',
   'save.confirmBody': 'Your saved mission (shift {n}/{total}) will be overwritten. This cannot be undone.',
   'save.confirmYes': 'Start new game',
@@ -158,6 +159,7 @@ export const en = {
   // Warnings (codes from engine getWarnings)
   'warn.habitatFail': 'Battery + solar ({available}) cannot cover the Main Habitat ({habitat}). Advancing will end the mission.',
   'warn.deficit': 'Power deficit of {deficit}: switch off systems before advancing (need {demand}, have {available}).',
+  'warn.tryOtherChoice': 'Your emergency response needs power too. If nothing else can be switched off, choose the other response.',
   'warn.radNoShelter': 'Radiation alert this shift — the shelter is OFF. Crew health will drop by {dmg}.',
   'warn.o2Out': 'Oxygen will run out this shift.',
   'warn.o2Low': 'Oxygen will be low ({v}).',
@@ -225,7 +227,7 @@ export const en = {
   'results.sheltered': 'sheltered',
   'results.limit': 'Health safety limit ({v})',
   'results.teachH': 'WHAT THIS MISSION TEACHES',
-  'results.restart': 'RESTART MISSION',
+  'results.restart': 'NEW MISSION',
   'results.menu': 'Main Menu',
   'fail.oxygen': 'Oxygen supply reached zero.',
   'fail.food': 'Food supply reached zero.',
@@ -306,9 +308,9 @@ export const en = {
   'cr.teamH': 'TEAM',
   'cr.team': 'Team SUN — NASA Space Apps Challenge 2026, “Build a Junior Astronaut Mission Trainer”.',
   'cr.aiH': 'AI TOOL DISCLOSURE',
-  'cr.ai': 'Source code, the vector lunar-base illustrations, educational text and the Korean/English translations were drafted with the help of Claude Code (Anthropic) and reviewed by the team. No AI service is used while the game runs. See AI_USAGE.md in the repository for details.',
+  'cr.ai': 'This game was built with AI help. **Claude Code (Anthropic)** helped write the game code, tests, science texts and the Korean/English translations. **OpenAI Codex** helped with the pixel-art and 2.5D graphics and the interface. The human team chose what to build, tested it and approved every change. No AI service is used while the game runs. Full details: AI_USAGE.md in the repository.',
   'cr.techH': 'TECHNOLOGY',
-  'cr.tech': 'React, TypeScript and Vite. Fonts: Orbitron, Inter and Noto Sans KR (SIL Open Font License, via Google Fonts).',
+  'cr.tech': 'React 18, TypeScript, Vite 5, Canvas 2D and Vitest (automated tests). Fonts: Orbitron, Inter and Noto Sans KR (SIL Open Font License, via Google Fonts).',
 
   // NASA site record texts (English originals live in site.json)
   'site.name': site.name,
@@ -596,4 +598,5 @@ export const en = {
   'ex.touch.controls': "Touch: drag the left joystick to drive · tap the right button to act (hold it to drill) · ❚❚ pauses.",
   'ex.touch.rotate': "Tip: landscape gives a wider view of the terrain (portrait works too).",
   'ex.close': "Close",
+  ...enLearn,
 };

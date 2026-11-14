@@ -26,6 +26,7 @@ const NO_UPGRADES: Upgrades = { solar: false, oxygen: false, battery: false };
 
 export function createInitialState(cfg: MissionConfig): GameState {
   return {
+    difficulty: cfg.difficulty,
     shift: 1,
     resources: { ...cfg.initial },
     facilities: { oxygen: true, greenhouse: false, shelter: false, lab: false },
@@ -383,6 +384,12 @@ export function getWarnings(state: GameState, cfg: MissionConfig, o: ShiftOutcom
       params: { deficit: o.optionalDeficit, demand: o.demand, available: o.available },
       text: `Power deficit of ${o.optionalDeficit}: switch off systems before advancing (need ${o.demand}, have ${o.available}).`,
     });
+    // The chosen emergency response itself needs power (cost, or a facility it locks ON): switching
+    // things off may not be enough, but the other response always fits once the habitat is powered.
+    const picked = getChoice(cfg, state.shift, state.choice);
+    if (picked && (picked.energyCost || picked.enable?.length)) {
+      w.push({ level: 'caution', code: 'tryOtherChoice', text: 'The chosen emergency response needs power; the other response may fit the budget.' });
+    }
   }
   if (event?.radiation && o.choiceId && o.radiation === 'exposed') {
     w.push({ level: 'critical', code: 'radNoShelter', params: { dmg: event.radiation.damage }, text: `The shelter is OFF. Crew health will drop by ${event.radiation.damage}.` });

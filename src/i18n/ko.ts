@@ -3,6 +3,7 @@
  * NASA 고유명사, 데이터 제품명, 논문 인용, URL, 단위는 원문을 유지한다.
  */
 import type { en } from './en';
+import { koLearn } from './ko.learn';
 
 export const ko: Record<keyof typeof en, string> = {
   // 언어 전환
@@ -29,8 +30,8 @@ export const ko: Record<keyof typeof en, string> = {
   // 저장 / 이어하기
   'save.continue': '이어하기',
   'save.newGame': '새 게임',
-  'save.slot': '{n}/{total}교대 · 자동 저장됨',
-  'save.slotDone': '임무 완료 · 결과 보기',
+  'save.slot': '{diff} · {n}/{total}교대 · 자동 저장됨',
+  'save.slotDone': '{diff} · 임무 완료 · 결과 보기',
   'save.confirmTitle': '새 게임을 시작할까요?',
   'save.confirmBody': '저장된 임무({n}/{total}교대)가 새 게임으로 덮어써집니다. 되돌릴 수 없습니다.',
   'save.confirmYes': '새 게임 시작',
@@ -157,6 +158,7 @@ export const ko: Record<keyof typeof en, string> = {
   // 경고
   'warn.habitatFail': '배터리 + 태양광({available})으로는 주 거주 모듈({habitat})을 가동할 수 없습니다. 이대로 진행하면 임무가 끝납니다.',
   'warn.deficit': '전력이 {deficit} 부족합니다. 진행하기 전에 시스템을 꺼 주세요 (필요 {demand}, 보유 {available}).',
+  'warn.tryOtherChoice': '선택한 비상 대응에도 전력이 듭니다. 더 끌 시설이 없다면 다른 대응을 고르세요.',
   'warn.radNoShelter': '이번 교대에 방사선 경보가 있는데 대피소가 꺼져 있습니다. 승무원 건강이 {dmg}만큼 떨어집니다.',
   'warn.o2Out': '이번 교대에 산소가 바닥납니다.',
   'warn.o2Low': '산소가 부족해집니다 ({v}).',
@@ -224,7 +226,7 @@ export const ko: Record<keyof typeof en, string> = {
   'results.sheltered': '대피 성공',
   'results.limit': '건강 안전 한계 ({v})',
   'results.teachH': '이번 임무에서 배운 점',
-  'results.restart': '임무 다시 시작',
+  'results.restart': '새 임무 시작',
   'results.menu': '메인 메뉴',
   'fail.oxygen': '산소가 바닥났습니다.',
   'fail.food': '식량이 바닥났습니다.',
@@ -305,9 +307,9 @@ export const ko: Record<keyof typeof en, string> = {
   'cr.teamH': '팀',
   'cr.team': '팀 SUN — NASA 스페이스 앱스 챌린지 2026, “Build a Junior Astronaut Mission Trainer” 과제.',
   'cr.aiH': 'AI 도구 사용 공개',
-  'cr.ai': '소스 코드, 달 기지 벡터 일러스트, 교육용 문구, 한국어·영어 번역은 Claude Code(Anthropic)의 도움을 받아 작성했고 팀이 검토했습니다. 게임 실행 중에는 어떤 AI 서비스도 사용하지 않습니다. 자세한 내용은 저장소의 AI_USAGE.md를 참고하세요.',
+  'cr.ai': '이 게임은 AI의 도움을 받아 만들었습니다. **Claude Code(Anthropic)**는 게임 코드, 테스트, 과학 설명, 한국어·영어 번역 작성을 도왔고, **OpenAI Codex**는 도트·2.5D 그래픽과 화면 디자인을 도왔습니다. 무엇을 만들지 정하고, 테스트하고, 모든 변경을 승인한 것은 사람 팀입니다. 게임 실행 중에는 어떤 AI 서비스도 사용하지 않습니다. 자세한 내용은 저장소의 AI_USAGE.md를 참고하세요.',
   'cr.techH': '기술',
-  'cr.tech': 'React, TypeScript, Vite. 글꼴: Orbitron, Inter, Noto Sans KR (SIL Open Font License, Google Fonts 제공).',
+  'cr.tech': 'React 18, TypeScript, Vite 5, Canvas 2D, Vitest(자동 테스트). 글꼴: Orbitron, Inter, Noto Sans KR (SIL Open Font License, Google Fonts 제공).',
 
   // NASA 지점 기록 (영문 원본: site.json)
   'site.name': '달 남극 섀클턴 크레이터 근처의 햇빛 드는 능선',
@@ -595,4 +597,5 @@ export const ko: Record<keyof typeof en, string> = {
   'ex.touch.controls': "터치: 왼쪽 조이스틱을 끌어 이동 · 오른쪽 버튼을 눌러 상호작용(시추는 길게) · ❚❚ 일시정지.",
   'ex.touch.rotate': "팁: 가로 화면에서 지형이 더 넓게 보입니다 (세로도 플레이 가능).",
   'ex.close': "닫기",
+  ...koLearn,
 };

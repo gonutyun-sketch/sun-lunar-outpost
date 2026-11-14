@@ -4,11 +4,11 @@
  * Missions are small step lists (MISSIONS below); each step kind has its own interaction.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MISSION } from '../game/config';
+import { difficultyOf, missionFor, type DifficultyId } from '../game/difficulty';
 import { useI18n } from '../i18n/I18n';
 import type { Key } from '../i18n/translate';
-import { createCircuit, isSolved, powered, rotateTile, N, E, S, W, type Circuit } from '../rover/circuit';
-import { createPressureGame, inBand, P, stepPressure, type PressureGame } from '../rover/pressure';
+import { createCircuit, isSolved, powered, rotateTile, targetMasks, wrongTiles, N, E, S, W, type Circuit } from '../rover/circuit';
+import { createPressureGame, inBand, stepPressure, type PressureGame } from '../rover/pressure';
 import { addTrack, batteryLevel, burst, createVis, emit, pruneTracks, snapDirection, stepVis, trackMotion, updateCamera, type BurstKind, type Vis } from '../rover/fx';
 import { drawFrame, mapDistance, type Marker } from '../rover/render';
 import { createRover, dist, ROVER, stepRover, type Input, type Rover } from '../rover/sim';
@@ -56,6 +56,8 @@ type Phase = 'brief' | 'play' | 'success' | 'failed';
 
 interface Props {
   missionId: string;
+  /** Difficulty of the running mission: battery, drain and puzzle settings (movement never changes). */
+  difficulty: DifficultyId;
   onExit: (result: { success: boolean; failures: number }) => void;
   fx: boolean;
 }
@@ -75,13 +77,19 @@ const OVERLAY: StepKind[] = ['circuit', 'pressure'];
 /** Short haptic pulse on phones that support it (ignored elsewhere). */
 const buzz = (pattern: number | number[]) => { try { navigator.vibrate?.(pattern); } catch { /* not supported */ } };
 
-export function ExploreScreen({ missionId, onExit, fx }: Props) {
+export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
   const { t } = useI18n();
   const def = MISSIONS[missionId];
-  const exp = MISSION.expeditions.find((e) => e.id === missionId)!;
+  const tune = difficultyOf(difficulty).rover;
+  const tuneRef = useRef(tune);
+  tuneRef.current = tune;
+  const exp = missionFor(difficulty).expeditions.find((e) => e.id === missionId)!;
+  /** Battery drain per second shown to the player (training values x difficulty). */
+  const rateOf = (v: number) => Number((v * tune.drainScale).toFixed(2));
+  const newPressure = () => createPressureGame({ bandPad: tune.pressureBandPad, hold: tune.pressureHold, wobbleScale: tune.wobbleScale });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const rover = useRef<Rover>(createRover(MAP));
+  const rover = useRef<Rover>(createRover(MAP, tune.batteryStart));
   const input = useRef<Input>({ up: false, down: false, left: false, right: false });
   /** Visual-only state (particles, tracks, camera, bursts). Never read by the physics or mission rules. */
   const vis = useRef<Vis>(createVis());
@@ -105,7 +113,9 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   const [flash, setFlash] = useState<string | null>(null);
   const { warning, add: warn, clear: clearWarnings } = useWarningQueue();
   const batteryWarningsShown = useRef<0 | 1 | 2>(0);
-  const [hud, setHud] = useState<Hud>({ battery: ROVER.batteryStart, rate: -ROVER.sunDrain, zone: 'sun', near: null, time: 0, drill: 0, distance: null });
+  /** Shadow / deep-shadow alerts already shown this attempt (Easy and Normal). */
+  const shadowAlerted = useRef(0);
+  const [hud, setHud] = useState<Hud>({ battery: tune.batteryStart, rate: -rateOf(ROVER.sunDrain), zone: 'sun', near: null, time: 0, drill: 0, distance: null });
   const [touchUI, setTouchUI] = useState(prefersTouch);
   touchRef.current = touchUI;
   const [portrait, setPortrait] = useState(() => typeof window !== 'undefined' && window.innerHeight > window.innerWidth);
@@ -121,7 +131,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   const [scanned, setScanned] = useState<SiteId[]>([]);
   const scannedRef = useRef<SiteId[]>([]);
   scannedRef.current = scanned;
-  const [gauges, setGauges] = useState<PressureGame>(createPressureGame);
+  const [gauges, setGauges] = useState<PressureGame>(newPressure);
   const pressureRef = useRef<PressureGame>(gauges);
   const valveSel = useRef(0);
   const [sel, setSel] = useState(0);
@@ -192,8 +202,9 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   }, [def]);
 
   const restart = useCallback(() => {
-    rover.current = createRover(MAP);
+    rover.current = createRover(MAP, tuneRef.current.batteryStart);
     batteryWarningsShown.current = 0;
+    shadowAlerted.current = 0;
     clearWarnings();
     vis.current = createVis();
     time.current = 0;
@@ -207,7 +218,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     setCollected([]);
     drill.current = 0;
     drillHeld.current = false;
-    const pg = createPressureGame();
+    const pg = newPressure();
     pressureRef.current = pg;
     setGauges(pg);
     setConfirmRestart(false);
@@ -232,7 +243,11 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     else if (s.kind === 'dock') { pop('ok', site.x, site.y); next(); }
     else if (s.kind === 'scan') {
       if (near === faulty()) { pop('warn', site.x, site.y, t('ex.fx.leak')); say(t('ex.o2.found')); vibrate([25, 40, 25]); next(); }
-      else if (!scannedRef.current.includes(near)) { setScanned([...scannedRef.current, near]); pop('info', site.x, site.y, t('ex.o2.normalTag')); say(t('ex.o2.normal')); }
+      else if (!scannedRef.current.includes(near)) {
+        const easy = tuneRef.current.circuitHint === 'path';
+        setScanned([...scannedRef.current, near]); pop('info', site.x, site.y, t('ex.o2.normalTag'));
+        say(t(easy ? 'ex.o2.normalEasy' : 'ex.o2.normal'), easy ? 3200 : 1300);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [def, targetSites, t]);
@@ -245,7 +260,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     if (n === c) return;
     circuitRef.current = n;
     setCircuit(n);
-    rover.current = { ...rover.current, battery: Math.max(0, rover.current.battery - ROVER.rotateCost) };
+    rover.current = { ...rover.current, battery: Math.max(0, rover.current.battery - tuneRef.current.rotateCost) };
     if (isSolved(n)) {
       setFlash(t('ex.pz.solved'));
       setTimeout(() => {
@@ -342,7 +357,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     if (ro && wrapRef.current) ro.observe(wrapRef.current);
     window.addEventListener('resize', measure);
     const labels = {
-      shadow: t('ex.map.shadow'), deep: t('ex.map.deep', { deep: ROVER.deepDrain }), dock: t('ex.map.dock'), charger: t('ex.map.charger'), solarB: t('ex.map.solarB'),
+      shadow: t('ex.map.shadow'), deep: t('ex.map.deep', { deep: rateOf(ROVER.deepDrain) }), dock: t('ex.map.dock'), charger: t('ex.map.charger'), solarB: t('ex.map.solarB'),
       base: t('ex.map.base'), oxygen: t('ex.map.oxygen'), samples: t('ex.map.samples'), depot: t('ex.map.depot'),
     };
     let alive = true;
@@ -360,9 +375,9 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
       const kind = def.steps[stepRef.current]?.kind;
       const active = p === 'play' && !pausedRef.current;
       const frozen = !!kind && OVERLAY.includes(kind);
-      let res = stepRover(MAP, rover.current, { up: false, down: false, left: false, right: false }, 0, true);
+      let res = stepRover(MAP, rover.current, { up: false, down: false, left: false, right: false }, 0, true, tuneRef.current.drainScale);
       if (active) {
-        res = stepRover(MAP, rover.current, input.current, dt, frozen);
+        res = stepRover(MAP, rover.current, input.current, dt, frozen, tuneRef.current.drainScale);
         rover.current = res.rover;
         time.current += dt;
         const R = res.rover;
@@ -435,6 +450,15 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
             drill.current = 0; // moving away or driving cancels drilling
           }
         }
+        // Easy/Normal: one large warning the first time the rover enters a shadow, and a deep shadow.
+        if (tuneRef.current.shadowAlerts && !frozen) {
+          const lvlShadow = res.deep ? 2 : res.inShadow ? 1 : 0;
+          if (lvlShadow > shadowAlerted.current) {
+            if (lvlShadow === 2) warn({ id: 'shadow-deep', tone: 'critical', title: 'notice.deep.title', action: 'notice.deep.action' });
+            else warn({ id: 'shadow', tone: 'caution', title: 'notice.shadow.title', action: 'notice.shadow.action' });
+            shadowAlerted.current = lvlShadow;
+          }
+        }
         // One large warning per threshold per sortie attempt. The HUD keeps showing the current level.
         const lvl = batteryLevel(R.battery);
         if (lvl > batteryWarningsShown.current) {
@@ -484,6 +508,13 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
       prevNear = nearId;
       // the faulty valve stays marked while the pressure panel is open
       if (kind === 'pressure') { const s = MAP.sites[faulty()]; markers.push({ x: s.x, y: s.y, r: s.r, state: 'near' }); }
+      // Easy/Normal: low battery -> the charging pad is marked (and the edge arrow can point to it)
+      const guides: Marker[] = [];
+      const gb = tuneRef.current.chargeGuideBelow;
+      if (gb > 0 && p === 'play' && !res.charging && rover.current.battery < gb && kind !== 'dock') {
+        const ch = MAP.charger;
+        guides.push({ x: ch.x, y: ch.y, r: ch.r + 12, state: 'goal', note: t('ex.guide.charge') });
+      }
 
       // Full frame rate while driving; when paused or behind a menu/briefing, redraw at ~12 fps to save battery
       idle += dt;
@@ -491,7 +522,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
         idle = 0;
         g.setTransform(cv.width / Math.max(1, box.w), 0, 0, cv.height / Math.max(1, box.h), 0, 0);
         drawFrame(g, box.w, box.h, MAP, rover.current, {
-          t: tNow, targets: markers, solarRepaired: def.id !== 'solarRepair' || isSolved(circuitRef.current),
+          t: tNow, targets: guides.length ? [...markers, ...guides] : markers, solarRepaired: def.id !== 'solarRepair' || isSolved(circuitRef.current),
           oxygenRepaired: def.id !== 'oxygenRepair' || o2Done.current, leak: leakSite ? [leakSite.x, leakSite.y] : null, cargo: cargo.current || collectedRef.current.length > 0,
           samples: def.id === 'sampleSurvey' ? (['sample1', 'sample2', 'sample3'] as SiteId[]).map((id) => ({ x: MAP.sites[id].x, y: MAP.sites[id].y, done: collectedRef.current.includes(id) })) : [],
           drill: drill.current,
@@ -583,9 +614,11 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
             <div className="ex-card panel">
               <span className="badge-data game">{t('ex.badge')}</span>
               <h2>{t(def.title)}</h2>
-              <p>{t(def.brief, { pct, leak: exp.oxygenLeak ?? 0, reward: exp.rewardResearch ?? 0, deep: ROVER.deepDrain })}</p>
+              <p>{t(def.brief, { pct, leak: exp.oxygenLeak ?? 0, reward: exp.rewardResearch ?? 0, deep: rateOf(ROVER.deepDrain) })}</p>
               <ol>{def.steps.map((s, i) => <li key={i}>{stepText(s)}</li>)}</ol>
-              <p className="ex-tip">{t('ex.brief.battery', { sun: ROVER.sunDrain, shadow: ROVER.shadowDrain, deep: ROVER.deepDrain, move: ROVER.moveDrain, charge: ROVER.padCharge })}</p>
+              <p className="ex-tip">{t('ex.brief.battery', { sun: rateOf(ROVER.sunDrain), shadow: rateOf(ROVER.shadowDrain), deep: rateOf(ROVER.deepDrain), move: rateOf(ROVER.moveDrain), charge: ROVER.padCharge })}</p>
+              <p className="ex-tip ex-diff">{t('ex.diff', { name: t(`diff.${difficulty}.name` as Key), b: tune.batteryStart })}</p>
+              {tune.circuitHint === 'path' && <p className="ex-tip ex-coach">{t(`ex.easy.${def.id}` as Key)}</p>}
               <p className="ex-tip">{touchUI ? t('ex.touch.controls') : t('ex.controls')}</p>
               {touchUI && portrait && <p className="ex-tip ex-rotate">{t('ex.touch.rotate')}</p>}
               <div className="ex-actions">
@@ -601,8 +634,10 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
             <div className="ex-card panel puzzle">
               <button type="button" className="touch-btn close-btn" aria-label={t('ex.close')} onClick={() => setStep(stepRef.current - 1)}>✕</button>
               <h2>{t('ex.pz.title')}</h2>
-              <p className="ex-tip">{t(touchUI ? 'ex.touch.circuit' : 'ex.pz.help', { cost: ROVER.rotateCost })}</p>
-              <CircuitView c={circuit} cursor={rotIdx[cursor]} onRotate={(i) => { setCursor(rotIdx.indexOf(i)); rotate(i); }} labels={{ src: t('ex.pz.source'), sink: t('ex.pz.sink') }} />
+              <p className="ex-tip">{t(touchUI ? 'ex.touch.circuit' : 'ex.pz.help', { cost: tune.rotateCost })}</p>
+              {tune.circuitHint === 'path' && !isSolved(circuit) && <p className="ex-tip ex-coach">{t('ex.pz.hintPath')}</p>}
+              {tune.circuitHint === 'count' && !isSolved(circuit) && <p className="ex-tip ex-coach">{t('ex.pz.hintCount', { n: wrongTiles(circuit) })}</p>}
+              <CircuitView c={circuit} cursor={rotIdx[cursor]} hint={tune.circuitHint === 'path'} onRotate={(i) => { setCursor(rotIdx.indexOf(i)); rotate(i); }} labels={{ src: t('ex.pz.source'), sink: t('ex.pz.sink') }} />
               {flash ? <div className="ex-flash">{flash}</div> : !touchUI && <p className="ex-tip">{t('ex.pz.close')}</p>}
             </div>
           </div>
@@ -613,7 +648,8 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
             <div className="ex-card panel puzzle pressure">
               <button type="button" className="touch-btn close-btn" aria-label={t('ex.close')} onClick={() => { valveDir.current = 0; setStep(stepRef.current - 1); }}>✕</button>
               <h2>{t('ex.o2.pz.title')}</h2>
-              <p className="ex-tip">{t('ex.o2.pz.help', { hold: P.hold })}</p>
+              <p className="ex-tip">{t('ex.o2.pz.help', { hold: gauges.hold })}</p>
+              {tune.pressureBandPad > 0 && <p className="ex-tip ex-coach">{t(tune.circuitHint === 'path' ? 'ex.o2.pz.easy' : 'ex.o2.pz.normal')}</p>}
               <PressureView game={gauges} sel={sel} vent={ventFlash}
                 onSelect={(i) => { valveSel.current = i; setSel(i); }}
                 onHold={(i, d) => { valveSel.current = i; setSel(i); valveDir.current = d; }}
@@ -696,7 +732,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
         <span className="ex-warn">
           {low && phase !== 'failed' && <b className="crit">{t(hud.battery < 10 ? 'ex.warn.crit' : 'ex.warn.low')}</b>}
           {!low && hud.zone === 'shadow' && <b>{t('ex.warn.shadow')}</b>}
-          {!low && hud.zone === 'deep' && <b className="crit">{t('ex.warn.deep', { deep: ROVER.deepDrain })}</b>}
+          {!low && hud.zone === 'deep' && <b className="crit">{t('ex.warn.deep', { deep: rateOf(ROVER.deepDrain) })}</b>}
         </span>
       </footer>
     </div>
@@ -815,16 +851,17 @@ function PressureView({ game, sel, vent, onSelect, onHold, labels }: {
       </div>
       <div className="g-hold">
         <span>{labels.hold}</span>
-        <div className="bar"><i style={{ width: `${Math.min(100, (game.stable / P.hold) * 100)}%` }} /></div>
+        <div className="bar"><i style={{ width: `${Math.min(100, (game.stable / game.hold) * 100)}%` }} /></div>
       </div>
     </div>
   );
 }
 
 /** SVG view of the 3×3 circuit. Powered tiles glow; rotatable tiles are yellow and clickable. */
-function CircuitView({ c, cursor, onRotate, labels }: { c: Circuit; cursor: number; onRotate: (i: number) => void; labels: { src: string; sink: string } }) {
+function CircuitView({ c, cursor, hint, onRotate, labels }: { c: Circuit; cursor: number; hint?: boolean; onRotate: (i: number) => void; labels: { src: string; sink: string } }) {
   const on = powered(c);
   const solved = isSolved(c);
+  const target = hint && !solved ? targetMasks() : null;
   const S0 = 84, O = 60;
   const seg = (mask: number, cx: number, cy: number) => {
     const h = S0 / 2;
@@ -853,6 +890,7 @@ function CircuitView({ c, cursor, onRotate, labels }: { c: Circuit; cursor: numb
                 <rect x={x + S0 - 12} y={yy + S0 - 12} width="5" height="5" className="cz-screw" />
               </>
             )}
+            {target?.has(i) && target.get(i) !== tile.mask && <g className="cz-ghost" aria-hidden>{seg(target.get(i)!, x + S0 / 2, yy + S0 / 2)}</g>}
             <g className="cz-path">{seg(tile.mask, x + S0 / 2, yy + S0 / 2)}</g>
             {on.has(i) && <g className="cz-flow" aria-hidden>{seg(tile.mask, x + S0 / 2, yy + S0 / 2)}</g>}
             {tile.mask !== 0 && <rect x={x + S0 / 2 - 6} y={yy + S0 / 2 - 6} width="12" height="12" className="cz-contact" />}
