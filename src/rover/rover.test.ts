@@ -196,3 +196,45 @@ describe('mission 2 map routes', () => {
     expect(r.y).toBeGreaterThan(470);
   });
 });
+
+import { shadowLevel } from './world';
+
+describe('mission 3: science survey terrain', () => {
+  it('the permanently shadowed crater floor drains −3/s (training value)', () => {
+    const s = MAP.sites.sample1;
+    expect(shadowLevel(MAP, s.x, s.y)).toBe(2);
+    const r = stepRover(MAP, { ...createRover(MAP), x: s.x, y: s.y }, NONE, 1);
+    expect(r.deep).toBe(true);
+    expect(r.rover.battery).toBeCloseTo(77, 5);
+    expect(shadowLevel(MAP, MAP.sites.sample2.x, MAP.sites.sample2.y)).toBe(0); // sunny east site
+    expect(shadowLevel(MAP, MAP.sites.sample3.x, MAP.sites.sample3.y)).toBe(1); // moderate shadow
+  });
+
+  /** Drive a sample loop, drilling 3 s at each site, then return to the dock. */
+  function survey(order: [number, number][][]) {
+    let r = createRover(MAP), t = 0;
+    for (const leg of order) {
+      const d = drive(r, leg);
+      r = d.r; t += d.t;
+      for (let i = 0; i < 240; i++) r = stepRover(MAP, r, NONE, 1 / 60, true).rover; // drilling 4 s
+      t += 4;
+    }
+    const home = drive(r, [[1500, 1080], [1000, 1000], [860, 900]]);
+    return { battery: home.r.battery, t: t + home.t, min: Math.min(home.r.battery, r.battery) };
+  }
+
+  it('a full survey is possible; the shortcut through the deep shadow costs far more battery than the sunny detour', () => {
+    const s1: [number, number] = [MAP.sites.sample1.x, MAP.sites.sample1.y];
+    const s2: [number, number] = [MAP.sites.sample2.x, MAP.sites.sample2.y];
+    const s3: [number, number] = [MAP.sites.sample3.x, MAP.sites.sample3.y];
+    // risky: S3 → straight across the dark crater floor to S1 → S2
+    const risky = survey([[[1100, 1100], s3], [[1700, 1420], s1], [[2440, 1400], s2]]);
+    // safer: S3 → S1 entering from the south edge only → S2 along the sunny southern rim
+    const safe = survey([[[1100, 1100], s3], [[1450, 1590], [2050, 1590], s1], [[2440, 1400], s2]]);
+    // eslint-disable-next-line no-console
+    console.log('[survey] risky', risky.t.toFixed(1), 's battery', risky.battery.toFixed(1), '| safe', safe.t.toFixed(1), 's battery', safe.battery.toFixed(1));
+    expect(risky.battery).toBeGreaterThan(0);
+    expect(safe.battery).toBeGreaterThan(0);
+    expect(risky.battery).toBeLessThan(safe.battery);
+  });
+});

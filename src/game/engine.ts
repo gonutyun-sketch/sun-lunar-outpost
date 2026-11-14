@@ -172,7 +172,12 @@ export function applyExpedition(state: GameState, cfg: MissionConfig, id: string
   if (!result.success && fails === 0) return state; // aborted without trying: nothing changes
   return {
     ...state,
-    resources: { ...state.resources, energy: Math.max(0, state.resources.energy - cost), oxygen },
+    resources: {
+      ...state.resources,
+      energy: Math.max(0, state.resources.energy - cost),
+      oxygen,
+      research: result.success ? Math.min(cfg.capacity.research, state.resources.research + (exp.rewardResearch ?? 0)) : state.resources.research,
+    },
     expeditionLog: [...state.expeditionLog, { shift: state.shift, id, success: result.success, failures: fails }],
     expeditionsDone: result.success ? [...state.expeditionsDone, id] : state.expeditionsDone,
     expeditionFails: state.expeditionFails + Math.max(0, result.failures),
@@ -326,6 +331,8 @@ export function chooseOption(state: GameState, cfg: MissionConfig, choiceId: str
   const choice = getEvent(cfg, state.shift)?.choices.find((c) => c.id === choiceId);
   if (!choice) return state;
   const facilities = { ...state.facilities };
+  // undo what the previous decision switched on (e.g. shelter) when the player changes their mind
+  for (const id of getChoice(cfg, state.shift, state.choice)?.enable ?? []) facilities[id] = false;
   for (const id of choice.enable ?? []) facilities[id] = true;
   for (const id of choice.disable ?? []) facilities[id] = false;
   return { ...state, choice: choiceId, facilities };

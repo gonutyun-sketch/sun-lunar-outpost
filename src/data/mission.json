@@ -240,6 +240,12 @@
       "oxygenLeak": 4,
       "failEnergyCost": 8,
       "failOxygenCost": 5
+    },
+    {
+      "id": "sampleSurvey",
+      "fromShift": 8,
+      "rewardResearch": 1,
+      "failEnergyCost": 8
     }
   ]
 }

@@ -11,7 +11,7 @@ _Last updated: 2026-11-14 (Phase 5)_
 | 7 | Gameplay v2: 12 shifts / 3 chapters, 3 upgrades, 5 interactive emergencies, rebalance | ✅ Done (awaiting play-test review) |
 | 8 | Rover exploration P0: drive, collide, battery, Mission 1 (solar repair) + circuit puzzle, linked to base | ✅ Done (awaiting play-test) |
 | 8b | Rover P1: Mission 2 — oxygen plant repair (parts, leak scan, pressure minigame) | ✅ Done (awaiting play-test) |
-| 8c | Rover P1: Mission 3 — science samples (route planning, 3 sites) | ⏳ Next, after Mission 2 review |
+| 8c | Rover P1: Mission 3 — science survey (3 samples, free order, deep-shadow risk, hold-E drilling) | ✅ Done (awaiting play-test) |
 | 6 | Public deployment, final QA, submission | ⏳ Needs GitHub/hosting account action by the team |
 
 ## Phase 5 delivered
@@ -68,6 +68,15 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Balance (sensible bot): both repairs → win 90; one failed attempt on each → win 84; skip O₂ repair → mission fails.
 - Fixes found in play-test: shelter switched on by "Shelter the crew" now turns off after the storm (it silently cost 7 energy every later shift); rock moved to remove a trap pocket on the east detour; render loop stops safely if a late frame arrives after closing.
 
+## Rover Mission 3 — science survey (2026-11-14)
+- Shift 8 (forecast-only shift), available to the end. An opportunity, not damage: success = research +1 milestone; each failed attempt −8 base energy. Skipping has no direct cost.
+- Three sample beacons in different directions, player chooses the order: S1 deep in a permanently shadowed crater floor (FICTIONAL training zone, heaters −3/s, frost visual), S2 sunny far east, S3 in a small-crater shadow. Stop and HOLD E for 4 s to drill (moving cancels); then dock.
+- Measured (bot, 4 s drills): risky route through the deep zone ends with battery 53.7, safer southern edge 57.8; in real play, idling in the deep zone drained the rover to 0 (failure path verified).
+- Rover launcher: one "LAUNCH ROVER (n)" button opens a menu when several missions are pending (3 stacked buttons pushed the Advance button off a 768 px screen).
+- Fix found in play-test: changing an emergency decision from "Shelter the crew" to "Keep working" left the shelter ON (silent −7 energy); the previous decision's forced facility is now switched back off.
+- Balance: with the research goal of 4 the +1 milestone mainly saves a lab shift for a human; the simple bot shows no score change (it runs the lab whenever it can), so the goal was not raised.
+- Estimated hands-on time: Mission 1 ≈ 40–50 s, Mission 2 ≈ 1.5 min, Mission 3 ≈ 1–1.5 min at bot speed; a first-time human with retries ≈ 4–6 min total (target was 6–8; see Remaining).
+
 ## Remaining (priority order)
 1. **P0** Create GitHub repo, push, enable Pages (steps in HANDOFF.md) → public demo URL, add to README.
 2. **P1** Team decision on difficulty (above). If changed: update mission.json + tests.
@@ -79,7 +88,6 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Control panel may still scroll slightly at 1366×768 when 2+ warnings are shown (all critical warnings are now above the fold).
 - Mid-transition screenshots can show the fading shift banner (cosmetic).
 
-## Last test results (2026-11-14, rover Mission 2)
-- `npm run typecheck` ✅ · `npm test` ✅ 55/55 (engine 24, rover 19, balance 11, i18n 5) · `npm run build` ✅ (dev-only hooks absent from bundle)
-- Browser 1366×768 (Korean, real key events): Shift 6 shows two rover buttons + two damage alerts → Mission 2 briefing → depot pickup → west gap → valve A "OK" → valve C leak → pressure solved with 25 taps in 13 s (0 vents) → east detour → dock → success; base: O₂ recycler +10 → +20, leak gone, only Mission 1 pending; Shift 6 report lists the failed attempt (−8 energy, −5 O₂) and the success. Failure path: battery 0 in the shadow → "back to base" applied −8 energy / −5 O₂, mission stays open; abort without failure costs nothing. Mission 1 re-tested after the screen rewrite: success in 38 s.
-- Note: the browser pane was hidden during part of the test, so a timer-based frame shim was injected into the page for testing only (no code change).
+## Last test results (2026-11-14, rover Mission 3)
+- `npm run typecheck` ✅ · `npm test` ✅ 58/58 · `npm run build` ✅
+- Browser 1366×768 (Korean, real key events; timer-frame shim injected for testing while the pane was hidden): Shift 8 → launcher "(3)" menu → Mission 3 briefing → S3 hold-E drill (1/3) → deep zone (HUD "❄", −3.25/s, red warning) → moving cancels drilling → S1 → S2 → dock → success (67 s, battery 50); base research 0/4 → 1/4, report "Rover — Science samples: success!", launcher "(2)". Failure: battery 0 in the deep zone → failure screen. Game played to the results screen; no console errors.

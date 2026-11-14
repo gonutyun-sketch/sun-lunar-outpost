@@ -56,7 +56,7 @@ Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(ba
 ## Rover expeditions
 - Config: mission.json `expeditions` (id, fromShift, solarMult, failEnergyCost). Engine: `activeExpedition`, `solarDamageMult`, `applyExpedition`. State: `expeditionsDone`, `expeditionFails`.
 - Flow: MissionScreen "LAUNCH ROVER" → App screen 'explore' (base state untouched) → ExploreScreen onExit({success, failures}) → applyExpedition → back to mission.
-- Missions are step lists in ExploreScreen `MISSIONS` (kinds: goto, circuit, pickup, scan, pressure, dock). To add Mission 3: add an expedition in mission.json (fromShift, effect), a MissionDef with steps (e.g. a new `sample` kind), sites in world.ts, and `ex.*` keys in en.ts/ko.ts. Engine effects available: solarMult, oxygenMult, oxygenLeak, failEnergyCost, failOxygenCost; `expeditionLog` feeds the shift report.
+- Missions are step lists in ExploreScreen `MISSIONS` (kinds: goto, circuit, pickup, scan, pressure, collect, dock). Mission 3 (sampleSurvey) uses `collect` (hold E, DRILL_TIME) and `rewardResearch`. To add more missions: add an expedition in mission.json (fromShift, effect), a MissionDef with steps (e.g. a new `sample` kind), sites in world.ts, and `ex.*` keys in en.ts/ko.ts. Engine effects available: solarMult, oxygenMult, oxygenLeak, failEnergyCost, failOxygenCost; `expeditionLog` feeds the shift report.
 - Tuning: ROVER constants in src/rover/sim.ts; map in world.ts; `npx vitest run src/rover` prints route times/battery.
 
 ## Next tasks for the next AI

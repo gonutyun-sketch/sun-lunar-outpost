@@ -77,7 +77,8 @@ describe('thoughtful play wins, careless play fails', () => {
   });
 
   it('random clicking rarely succeeds and usually fails', () => {
-    const r = simulate(MISSION, 3000, randomPolicy, 7);
+    // random clickers are not credited with the optional science expedition
+    const r = simulate(MISSION, 3000, randomPolicy, 7, { skip: ['sampleSurvey'] });
     // eslint-disable-next-line no-console
     console.log('[balance] random player', JSON.stringify(r));
     expect(r.success).toBeLessThan(0.15);

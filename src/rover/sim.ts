@@ -2,7 +2,7 @@
  * Rover physics and battery — pure functions (no DOM), unit-tested.
  * Battery numbers are FICTIONAL gameplay values (see ROVER below).
  */
-import { inShadow, onCharger, type WorldMap } from './world';
+import { onCharger, shadowLevel, type WorldMap } from './world';
 
 export const ROVER = {
   radius: 22,
@@ -14,6 +14,7 @@ export const ROVER = {
   batteryStart: 80,
   sunCharge: 1, // per second in sunlight
   shadowDrain: 1.5, // per second in shadow
+  deepDrain: 3, // per second in a permanently shadowed (deep) zone — heaters fight the cold
   moveDrain: 0.25, // extra per second while moving
   padCharge: 12, // per second on the charging pad
   rotateCost: 0.5, // per circuit rotation (robot arm)
@@ -76,6 +77,8 @@ export interface StepResult {
   /** Hit something this step (for feedback). */
   bumped: boolean;
   inShadow: boolean;
+  /** In a permanently shadowed (deep) zone. */
+  deep: boolean;
   charging: boolean;
   moving: boolean;
   /** Battery change per second at this moment (for the HUD). */
@@ -128,12 +131,13 @@ export function stepRover(m: WorldMap, prev: Rover, input: Input, dt: number, fr
     r.driven += dt;
   }
 
-  const shadow = inShadow(m, r.x, r.y);
+  const level = shadowLevel(m, r.x, r.y);
+  const shadow = level > 0;
   const charging = onCharger(m, r.x, r.y);
-  const rate = charging ? ROVER.padCharge : (shadow ? -ROVER.shadowDrain : ROVER.sunCharge) - (moving ? ROVER.moveDrain : 0);
+  const rate = charging ? ROVER.padCharge : (level === 2 ? -ROVER.deepDrain : level === 1 ? -ROVER.shadowDrain : ROVER.sunCharge) - (moving ? ROVER.moveDrain : 0);
   r.battery = Math.max(0, Math.min(ROVER.batteryMax, r.battery + rate * dt));
 
-  return { rover: r, bumped, inShadow: shadow, charging, moving, rate };
+  return { rover: r, bumped, inShadow: shadow, deep: level === 2, charging, moving, rate };
 }
 
 export const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);

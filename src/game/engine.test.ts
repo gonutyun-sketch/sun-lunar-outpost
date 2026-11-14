@@ -147,6 +147,8 @@ describe('emergencies', () => {
     expect(toggleFacility(sh, MISSION, 'shelter').facilities.shelter).toBe(true);
     // …and switches back off after the storm shift
     expect(advanceShift(sh, MISSION).facilities.shelter).toBe(false);
+    // changing the decision to 'work' turns the shelter back off
+    expect(chooseOption(sh, MISSION, 'work').facilities.shelter).toBe(false);
     // with no decision at all the crew would be fully exposed (turn is blocked until they decide)
     const none = projectCurrentShift(at(e.shift), MISSION);
     expect(none.needsChoice).toBe(true);
@@ -211,6 +213,21 @@ describe('rover expedition: solar repair', () => {
     s = advanceShift(s, MISSION);
     expect(s.shift).toBe(3);
     expect(solarDamageMult(s, MISSION)).toBe(0.8);
+  });
+});
+
+describe('rover expedition: science samples', () => {
+  it('available from shift 8; success adds a research milestone (capped); failure costs energy only', () => {
+    const s8 = { ...createInitialState(MISSION), shift: 8, expeditionsDone: ['solarRepair', 'oxygenRepair'] };
+    expect(activeExpedition(s8, MISSION)?.id).toBe('sampleSurvey');
+    expect(projectCurrentShift(s8, MISSION).solarDamaged).toBe(false);
+    const ok = applyExpedition(s8, MISSION, 'sampleSurvey', { success: true, failures: 0 });
+    expect(ok.resources.research).toBe(1);
+    const capped = applyExpedition({ ...s8, resources: { ...s8.resources, research: 4 } }, MISSION, 'sampleSurvey', { success: true, failures: 0 });
+    expect(capped.resources.research).toBe(4);
+    const fail = applyExpedition(s8, MISSION, 'sampleSurvey', { success: false, failures: 1 });
+    expect(fail.resources).toEqual({ ...s8.resources, energy: s8.resources.energy - 8 });
+    expect(activeExpedition(fail, MISSION)?.id).toBe('sampleSurvey');
   });
 });
 

@@ -71,6 +71,8 @@ export interface ExpeditionConfig {
   oxygenMult?: number;
   /** Extra oxygen lost per shift (leak) while the mission is not completed. */
   oxygenLeak?: number;
+  /** Research milestones gained on success (science expeditions). */
+  rewardResearch?: number;
   /** Base oxygen lost per failed attempt (vented during the failed repair). */
   failOxygenCost?: number;
   /** Base energy spent to recover the rover after each failed attempt. */

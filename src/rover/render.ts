@@ -24,10 +24,14 @@ export interface FrameInfo {
   /** Visible gas leak (the faulty valve) — a clue for the scan step. */
   leak: { x: number; y: number } | null;
   cargo: boolean;
+  /** Science sample sites (Mission 3). */
+  samples: { x: number; y: number; done: boolean }[];
+  /** Drill progress at the rover (0..1), when sampling. */
+  drill: number;
   inShadow: boolean;
   shake: number;
   particles: Particle[];
-  labels: { shadow: string; dock: string; charger: string; solarB: string; base: string; oxygen: string; samples: string; depot: string };
+  labels: { shadow: string; deep: string; dock: string; charger: string; solarB: string; base: string; oxygen: string; samples: string; depot: string };
 }
 
 let terrainCache: { key: string; canvas: HTMLCanvasElement } | null = null;
@@ -135,16 +139,24 @@ export function drawFrame(g: CanvasRenderingContext2D, vw: number, vh: number, m
   // shadow zones (training scenario): soft dark pools with dashed boundary
   for (const s of m.shadows) {
     const sg = g.createRadialGradient(s.x, s.y, s.r * 0.55, s.x, s.y, s.r);
-    sg.addColorStop(0, 'rgba(4,7,16,0.62)');
-    sg.addColorStop(1, 'rgba(4,7,16,0.38)');
+    sg.addColorStop(0, s.deep ? 'rgba(2,4,14,0.55)' : 'rgba(4,7,16,0.62)');
+    sg.addColorStop(1, s.deep ? 'rgba(10,20,50,0.45)' : 'rgba(4,7,16,0.38)');
     g.fillStyle = sg;
     g.beginPath(); g.arc(s.x, s.y, s.r, 0, Math.PI * 2); g.fill();
     g.setLineDash([10, 8]);
     g.lineWidth = 2;
-    g.strokeStyle = 'rgba(120,150,210,0.45)';
+    g.strokeStyle = s.deep ? 'rgba(140,190,255,0.7)' : 'rgba(120,150,210,0.45)';
     g.stroke();
     g.setLineDash([]);
-    label(g, f.labels.shadow, s.x, s.y - s.r + 22, '#9fb6e0');
+    if (s.deep) {
+      // frost sparkles in the permanently shadowed training zone
+      for (let k = 0; k < 40; k++) {
+        const a = k * 2.399, rr = s.r * Math.sqrt((k * 0.618) % 1);
+        g.fillStyle = `rgba(190,220,255,${0.25 + 0.25 * Math.sin(f.t * 2 + k)})`;
+        g.fillRect(s.x + Math.cos(a) * rr, s.y + Math.sin(a) * rr, 2, 2);
+      }
+      label(g, f.labels.deep, s.x, s.y + s.r - 18, '#bfe0ff');
+    } else label(g, f.labels.shadow, s.x, s.y - s.r + 22, '#9fb6e0');
   }
 
   // charging pad
@@ -235,8 +247,16 @@ export function drawFrame(g: CanvasRenderingContext2D, vw: number, vh: number, m
   }
   label(g, f.labels.solarB, m.sites.solarB.x, m.sites.solarB.y + 46, f.solarRepaired ? '#6CE0B2' : '#ff8fa0');
 
-  // sample site marker (future mission, scenery)
+  // science sample beacons (Mission 3)
   label(g, f.labels.samples, m.sites.samples.x, m.sites.samples.y, '#8ea3bd');
+  for (const s of f.samples) {
+    g.strokeStyle = '#c9d0da'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(s.x, s.y); g.lineTo(s.x, s.y - 34); g.stroke();
+    g.fillStyle = s.done ? '#6CE0B2' : `rgba(244,202,101,${0.6 + 0.4 * Math.sin(f.t * 4)})`;
+    g.beginPath(); g.moveTo(s.x, s.y - 34); g.lineTo(s.x + 18, s.y - 28); g.lineTo(s.x, s.y - 22); g.closePath(); g.fill();
+    g.fillStyle = s.done ? 'rgba(108,224,178,0.25)' : 'rgba(244,202,101,0.18)';
+    g.beginPath(); g.ellipse(s.x, s.y, 14, 7, 0, 0, Math.PI * 2); g.fill();
+  }
 
   // objective markers
   for (const mk of f.targets) {
@@ -279,6 +299,15 @@ export function drawFrame(g: CanvasRenderingContext2D, vw: number, vh: number, m
   g.fillStyle = '#F4CA65'; g.fillRect(16, -8, 5, 5); g.fillRect(16, 3, 5, 5); // headlights
   g.fillStyle = r.battery > 25 ? '#6CE0B2' : '#ff6b7a'; g.beginPath(); g.arc(-12, 0, 2.5, 0, Math.PI * 2); g.fill();
   g.restore();
+  // drill progress ring (sampling)
+  if (f.drill > 0) {
+    g.lineWidth = 6; g.strokeStyle = '#56C7F2';
+    g.beginPath(); g.arc(r.x, r.y, ROVER.radius + 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f.drill); g.stroke();
+    for (let k = 0; k < 3; k++) {
+      g.fillStyle = `rgba(200,200,205,${0.5 - k * 0.15})`;
+      g.beginPath(); g.arc(r.x + Math.sin(f.t * 20 + k) * 8, r.y + Math.cos(f.t * 17 + k) * 8, 3 + k, 0, Math.PI * 2); g.fill();
+    }
+  }
   // battery ring under the rover
   g.lineWidth = 3;
   g.strokeStyle = r.battery > 25 ? 'rgba(108,224,178,0.8)' : 'rgba(255,107,122,0.9)';

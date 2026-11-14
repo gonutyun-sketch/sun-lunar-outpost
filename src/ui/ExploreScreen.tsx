@@ -14,7 +14,7 @@ import { createRover, dist, ROVER, stepRover, type Input, type Rover } from '../
 import { MAP, type Site } from '../rover/world';
 
 type SiteId = Site['id'];
-type StepKind = 'goto' | 'circuit' | 'pickup' | 'scan' | 'pressure' | 'dock';
+type StepKind = 'goto' | 'circuit' | 'pickup' | 'scan' | 'pressure' | 'collect' | 'dock';
 interface Step { kind: StepKind; site?: SiteId; sites?: SiteId[]; obj: Key; chip: Key }
 interface MissionDef { id: string; title: Key; brief: Key; successTitle: Key; successDesc: Key; steps: Step[] }
 
@@ -36,7 +36,16 @@ const MISSIONS: Record<string, MissionDef> = {
       { kind: 'dock', obj: 'ex.obj.return', chip: 'ex.step.return' },
     ],
   },
+  sampleSurvey: {
+    id: 'sampleSurvey', title: 'ex.mission.sampleSurvey', brief: 'ex.brief.sampleSurvey', successTitle: 'ex.sc.successTitle', successDesc: 'ex.sc.successDesc',
+    steps: [
+      { kind: 'collect', sites: ['sample1', 'sample2', 'sample3'], obj: 'ex.sc.obj.collect', chip: 'ex.sc.step.collect' },
+      { kind: 'dock', obj: 'ex.obj.return', chip: 'ex.step.return' },
+    ],
+  },
 };
+/** Seconds of drilling (rover stopped, E held) per sample. */
+const DRILL_TIME = 4;
 /** Which valve leaks, per attempt (varies when you retry). The first one is NOT the nearest valve, so the player must search. */
 const FAULTY: SiteId[] = ['valveC', 'valveB', 'valveA'];
 
@@ -48,7 +57,7 @@ interface Props {
   fx: boolean;
 }
 
-interface Hud { battery: number; rate: number; zone: 'sun' | 'shadow' | 'charge'; near: SiteId | null; time: number }
+interface Hud { battery: number; rate: number; zone: 'sun' | 'shadow' | 'deep' | 'charge'; near: SiteId | null; time: number }
 
 const OVERLAY: StepKind[] = ['circuit', 'pressure'];
 
@@ -95,6 +104,13 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   const [sel, setSel] = useState(0);
   const valveDir = useRef<-1 | 0 | 1>(0);
   const [ventFlash, setVentFlash] = useState<number | null>(null);
+  // Mission 3: samples (hold E to drill)
+  const [collected, setCollected] = useState<SiteId[]>([]);
+  const collectedRef = useRef<SiteId[]>([]);
+  collectedRef.current = collected;
+  const drill = useRef(0);
+  const drillHeld = useRef(false);
+  const drillSite = useRef<SiteId | null>(null);
 
   // Development-only hooks for automated play-testing. Not present in production builds.
   if (import.meta.env.DEV) {
@@ -126,7 +142,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     const s = def.steps[stepRef.current];
     if (!s || phaseRef.current !== 'play') return [];
     if (s.kind === 'goto' || s.kind === 'pickup') return [s.site!];
-    if (s.kind === 'scan') return s.sites!;
+    if (s.kind === 'scan' || s.kind === 'collect') return s.sites!;
     if (s.kind === 'dock') return ['dock'];
     return [];
   }, [def]);
@@ -139,6 +155,9 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     setCircuit(createCircuit());
     setCursor(0);
     setScanned([]);
+    setCollected([]);
+    drill.current = 0;
+    drillHeld.current = false;
     const pg = createPressureGame();
     pressureRef.current = pg;
     setGauges(pg);
@@ -215,15 +234,17 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
       }
       const k = keymap[e.code];
       if (k) { e.preventDefault(); input.current[k] = true; }
+      if (e.code === 'KeyE' && kind === 'collect') { e.preventDefault(); drillHeld.current = true; return; }
       if (e.code === 'KeyE') { e.preventDefault(); interact(); }
     };
     const up = (e: KeyboardEvent) => {
       const k = keymap[e.code];
       if (k) input.current[k] = false;
+      if (e.code === 'KeyE') drillHeld.current = false;
       if ((e.code === 'ArrowUp' || e.code === 'KeyW') && valveDir.current === 1) valveDir.current = 0;
       if ((e.code === 'ArrowDown' || e.code === 'KeyS') && valveDir.current === -1) valveDir.current = 0;
     };
-    const blur = () => { input.current = { up: false, down: false, left: false, right: false }; valveDir.current = 0; };
+    const blur = () => { input.current = { up: false, down: false, left: false, right: false }; valveDir.current = 0; drillHeld.current = false; };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', blur);
@@ -238,7 +259,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     const cv = canvasRef.current!, g = cv.getContext('2d')!;
     let raf = 0, last = performance.now(), hudTimer = 0, gaugeTimer = 0;
     const labels = {
-      shadow: t('ex.map.shadow'), dock: t('ex.map.dock'), charger: t('ex.map.charger'), solarB: t('ex.map.solarB'),
+      shadow: t('ex.map.shadow'), deep: t('ex.map.deep'), dock: t('ex.map.dock'), charger: t('ex.map.charger'), solarB: t('ex.map.solarB'),
       base: t('ex.map.base'), oxygen: t('ex.map.oxygen'), samples: t('ex.map.samples'), depot: t('ex.map.depot'),
     };
     let alive = true;
@@ -269,6 +290,24 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
           if (gaugeTimer > 1 / 30 || r.game.done) { gaugeTimer = 0; setGauges(r.game); }
           if (r.game.done) { o2Done.current = true; valveDir.current = 0; say(t('ex.o2.stable'), 1800); next(); }
         }
+        if (kind === 'collect') {
+          const here = (def.steps[stepRef.current].sites ?? []).find((id) => !collectedRef.current.includes(id) && dist(rover.current, MAP.sites[id]) <= MAP.sites[id].r);
+          const still = Math.hypot(rover.current.vx, rover.current.vy) < 15;
+          if (here && still && drillHeld.current) {
+            if (drillSite.current !== here) { drillSite.current = here; drill.current = 0; }
+            drill.current += dt / DRILL_TIME;
+            if (drill.current >= 1) {
+              drill.current = 0;
+              const got = [...collectedRef.current, here];
+              collectedRef.current = got;
+              setCollected(got);
+              say(t('ex.sc.got', { n: got.length, total: 3 }));
+              if (got.length >= 3) next();
+            }
+          } else if (!here || !still) {
+            drill.current = 0; // moving away or driving cancels drilling
+          }
+        }
         if (rover.current.battery <= 0) { setPhase('failed'); setFailures((f) => f + 1); }
       }
       if (def.id === 'solarRepair') solarDone.current = isSolved(circuitRef.current);
@@ -288,21 +327,23 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
         const s = MAP.sites[id];
         const near = dist(rover.current, s) <= s.r;
         if (near) nearId = id;
-        const done = kind === 'scan' && scannedRef.current.includes(id);
-        return { x: s.x, y: s.y, r: s.r, state: done ? 'done' : near ? 'near' : 'goal', note: done ? t('ex.o2.normalTag') : undefined };
+        const done = (kind === 'scan' && scannedRef.current.includes(id)) || (kind === 'collect' && collectedRef.current.includes(id));
+        return { x: s.x, y: s.y, r: s.r, state: done ? 'done' : near ? 'near' : 'goal', note: done ? t(kind === 'collect' ? 'ex.sc.doneTag' : 'ex.o2.normalTag') : undefined };
       });
       // the faulty valve stays marked while the pressure panel is open
       if (kind === 'pressure') { const s = MAP.sites[faulty()]; markers.push({ x: s.x, y: s.y, r: s.r, state: 'near' }); }
       const leakSite = def.id === 'oxygenRepair' && !o2Done.current ? MAP.sites[faulty()] : null;
       drawFrame(g, box.width, box.height, MAP, rover.current, {
         t: now / 1000, targets: markers, solarRepaired: def.id !== 'solarRepair' || solarDone.current,
-        oxygenRepaired: def.id !== 'oxygenRepair' || o2Done.current, leak: leakSite, cargo: cargo.current,
+        oxygenRepaired: def.id !== 'oxygenRepair' || o2Done.current, leak: leakSite, cargo: cargo.current || collectedRef.current.length > 0,
+        samples: def.id === 'sampleSurvey' ? (['sample1', 'sample2', 'sample3'] as SiteId[]).map((id) => ({ x: MAP.sites[id].x, y: MAP.sites[id].y, done: collectedRef.current.includes(id) })) : [],
+        drill: drill.current,
         inShadow: res.inShadow, shake: shake.current, particles: particles.current, labels,
       });
       hudTimer += dt;
       if (hudTimer > 0.1) {
         hudTimer = 0;
-        setHud({ battery: rover.current.battery, rate: res.rate, zone: res.charging ? 'charge' : res.inShadow ? 'shadow' : 'sun', near: nearId, time: time.current });
+        setHud({ battery: rover.current.battery, rate: res.rate, zone: res.charging ? 'charge' : res.deep ? 'deep' : res.inShadow ? 'shadow' : 'sun', near: nearId, time: time.current });
       }
       raf = requestAnimationFrame(frame);
     };
@@ -317,6 +358,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     ? step.kind === 'goto' ? t('ex.prompt.repair')
       : step.kind === 'pickup' ? t('ex.o2.prompt.pickup')
       : step.kind === 'scan' ? (scanned.includes(hud.near) ? null : t('ex.o2.prompt.scan'))
+      : step.kind === 'collect' ? (collected.includes(hud.near) ? null : t('ex.sc.prompt'))
       : step.kind === 'dock' ? t('ex.prompt.dock') : null
     : null;
   const low = hud.battery < 25;
@@ -333,7 +375,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
         </div>
         <div className="ex-steps" aria-label={t('ex.progress')}>
           {def.steps.map((s, i) => (
-            <span key={i} className={`ex-step ${i < doneIdx ? 'done' : i === doneIdx && playing ? 'now' : ''}`}>{i + 1}. {t(s.chip)}</span>
+            <span key={i} className={`ex-step ${i < doneIdx ? 'done' : i === doneIdx && playing ? 'now' : ''}`}>{i + 1}. {t(s.chip, { n: collected.length, total: 3 })}</span>
           ))}
         </div>
         <div className={`ex-battery ${low ? 'low' : ''}`} title={t('ex.batteryTip')}>
@@ -357,7 +399,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
             <div className="ex-card panel">
               <span className="badge-data game">{t('ex.badge')}</span>
               <h2>{t(def.title)}</h2>
-              <p>{t(def.brief, { pct, leak: exp.oxygenLeak ?? 0 })}</p>
+              <p>{t(def.brief, { pct, leak: exp.oxygenLeak ?? 0, reward: exp.rewardResearch ?? 0 })}</p>
               <ol>{def.steps.map((s, i) => <li key={i}>{t(s.obj)}</li>)}</ol>
               <p className="ex-tip">{t('ex.brief.battery', { sun: ROVER.sunCharge, shadow: ROVER.shadowDrain, move: ROVER.moveDrain })}</p>
               <p className="ex-tip">{t('ex.controls')}</p>
@@ -425,7 +467,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
             <div className="ex-card panel win">
               <span className="badge-data measured">{t('ex.success')}</span>
               <h2>{t(def.successTitle)}</h2>
-              <p className="ex-reward">{t(def.successDesc, { pct, leak: exp.oxygenLeak ?? 0 })}</p>
+              <p className="ex-reward">{t(def.successDesc, { pct, leak: exp.oxygenLeak ?? 0, reward: exp.rewardResearch ?? 0 })}</p>
               <p className="ex-tip">{t('ex.stats', { t: Math.round(hud.time), b: Math.round(hud.battery) })}</p>
               {failures > 0 && <p className="ex-tip">{t(exp.failOxygenCost ? 'ex.o2.failCost' : 'ex.failCost', { n: failures, cost: failures * exp.failEnergyCost, o2: failures * (exp.failOxygenCost ?? 0) })}</p>}
               <div className="ex-actions"><button className="btn btn-primary" autoFocus onClick={() => onExit({ success: true, failures })}>{t('ex.back')}</button></div>
@@ -455,6 +497,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
         <span className="ex-warn">
           {low && phase !== 'failed' && <b className="crit">{t('ex.warn.low')}</b>}
           {!low && hud.zone === 'shadow' && <b>{t('ex.warn.shadow')}</b>}
+          {!low && hud.zone === 'deep' && <b className="crit">{t('ex.warn.deep')}</b>}
         </span>
       </footer>
     </div>

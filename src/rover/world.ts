@@ -6,10 +6,12 @@
  */
 
 export interface Circle { x: number; y: number; r: number }
+/** Shadow zone; `deep` = permanently shadowed training zone (very cold → heaters drain faster). */
+export interface Shadow extends Circle { deep?: boolean }
 export interface Rect { x: number; y: number; w: number; h: number }
 
 export interface Site {
-  id: 'base' | 'dock' | 'solarB' | 'oxygen' | 'samples' | 'solarFarm' | 'depot' | 'valveA' | 'valveB' | 'valveC';
+  id: 'base' | 'dock' | 'solarB' | 'oxygen' | 'samples' | 'solarFarm' | 'depot' | 'valveA' | 'valveB' | 'valveC' | 'sample1' | 'sample2' | 'sample3';
   x: number;
   y: number;
   /** Interaction radius. */
@@ -26,7 +28,7 @@ export interface WorldMap {
   /** Impassable rectangles: buildings, panel rows. */
   blocks: Rect[];
   /** Shadow zones (training scenario). Circles; a point inside any circle is in shadow. */
-  shadows: Circle[];
+  shadows: Shadow[];
   /** Fast-charging pad. */
   charger: Circle;
   sites: Record<Site['id'], Site>;
@@ -70,7 +72,9 @@ export const MAP: WorldMap = {
   shadows: [
     { x: 1500, y: 560, r: 330 }, // crater shadow: short route to the farm passes through it
     { x: 2190, y: 620, r: 190 }, // ridge shadow over the damaged segment B
-    { x: 1960, y: 1270, r: 300 }, // permanently shadowed sample crater (training zone)
+    { x: 1960, y: 1270, r: 300 }, // sample crater: outer shadow
+    { x: 1960, y: 1360, r: 250, deep: true }, // permanently shadowed crater floor (training zone, south side): heaters drain −3/s
+    { x: 1190, y: 1400, r: 240 }, // small-crater shadow around sample 3
     { x: 420, y: 1300, r: 170 },
     { x: 130, y: 360, r: 230 }, // north-west shadow: the short west gap and part of the O₂ plant
   ],
@@ -85,12 +89,24 @@ export const MAP: WorldMap = {
     valveA: { id: 'valveA', x: 110, y: 318, r: 52 },
     valveB: { id: 'valveB', x: 330, y: 215, r: 52 },
     valveC: { id: 'valveC', x: 195, y: 100, r: 52 },
-    samples: { id: 'samples', x: 1960, y: 1100, r: 0 },
+    samples: { id: 'samples', x: 1960, y: 1010, r: 0 },
+    sample1: { id: 'sample1', x: 2150, y: 1470, r: 55 }, // deep in the permanently shadowed zone
+    sample2: { id: 'sample2', x: 2440, y: 1180, r: 55 }, // sunny but far east
+    sample3: { id: 'sample3', x: 1230, y: 1470, r: 55 }, // moderate shadow near the small crater
   },
 };
 
 export function inShadow(m: WorldMap, x: number, y: number): boolean {
-  return m.shadows.some((s) => (x - s.x) ** 2 + (y - s.y) ** 2 < s.r * s.r);
+  return shadowLevel(m, x, y) > 0;
+}
+
+/** 0 = sunlit, 1 = shadow, 2 = permanently shadowed (deep) training zone. */
+export function shadowLevel(m: WorldMap, x: number, y: number): 0 | 1 | 2 {
+  let lvl: 0 | 1 | 2 = 0;
+  for (const s of m.shadows) {
+    if ((x - s.x) ** 2 + (y - s.y) ** 2 < s.r * s.r) lvl = s.deep ? 2 : lvl === 2 ? 2 : 1;
+  }
+  return lvl;
 }
 
 export function onCharger(m: WorldMap, x: number, y: number): boolean {

@@ -208,6 +208,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
   const { t } = useI18n();
   const [report, setReport] = useState<ShiftReport | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
+  const [roverMenu, setRoverMenu] = useState(false);
 
   const outcome = useMemo(() => projectCurrentShift(state, MISSION), [state]);
   const warnings = useMemo(() => getWarnings(state, MISSION, outcome), [state, outcome]);
@@ -376,7 +377,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
 
           {expeditions.map((x) => (
             <div key={x.id} className="alert caution expedition-alert">
-              {x.id === 'oxygenRepair' ? t('ex.o2.pending', { pct: o2DamagePct, leak }) : t('ex.pending', { pct: damagePct })}
+              {x.id === 'oxygenRepair' ? t('ex.o2.pending', { pct: o2DamagePct, leak }) : x.id === 'sampleSurvey' ? t('ex.sc.pending') : t('ex.pending', { pct: damagePct })}
             </div>
           ))}
 
@@ -433,11 +434,25 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
           <p>{t(`${eduKey}.text` as Key)}</p>
         </section>
         <div className="advance panel">
-          {!ended && expeditions.map((x) => (
-            <button key={x.id} className="btn btn-rover" onClick={() => onExplore(x.id)} title={t(x.id === 'oxygenRepair' ? 'ex.o2.launchTip' : 'ex.launchTip')}>
-              🚙 {expeditions.length > 1 ? t(`ex.short.${x.id}` as Key) : t('ex.launch')}
-            </button>
-          ))}
+          {!ended && expeditions.length > 0 && (
+            <div className="rover-launch">
+              {roverMenu && expeditions.length > 1 && (
+                <div className="rover-menu panel" role="menu">
+                  {expeditions.map((x) => (
+                    <button key={x.id} role="menuitem" className="btn btn-rover" onClick={() => { setRoverMenu(false); onExplore(x.id); }}
+                      title={t(x.id === 'oxygenRepair' ? 'ex.o2.launchTip' : x.id === 'sampleSurvey' ? 'ex.sc.launchTip' : 'ex.launchTip')}>
+                      🚙 {t(`ex.short.${x.id}` as Key)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button className="btn btn-rover" aria-expanded={expeditions.length > 1 ? roverMenu : undefined}
+                title={expeditions.length === 1 ? t(expeditions[0].id === 'oxygenRepair' ? 'ex.o2.launchTip' : expeditions[0].id === 'sampleSurvey' ? 'ex.sc.launchTip' : 'ex.launchTip') : undefined}
+                onClick={() => (expeditions.length === 1 ? onExplore(expeditions[0].id) : setRoverMenu((v) => !v))}>
+                🚙 {expeditions.length === 1 ? t(`ex.short.${expeditions[0].id}` as Key) : `${t('ex.launch')} (${expeditions.length})`}
+              </button>
+            </div>
+          )}
           {ended ? (
             <button className="btn btn-primary" onClick={onFinish}>{t('advance.results')}</button>
           ) : (
