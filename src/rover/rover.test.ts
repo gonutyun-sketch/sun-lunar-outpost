@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createCircuit, isSolved, powered, rotateMask, rotateTile, N, E, S, W } from './circuit';
 import { createRover, ROVER, stepRover, type Input, type Rover } from './sim';
+import { driveRoute, ROUTES } from './routes';
 import { inShadow, MAP, shadowLevel } from './world';
 
 const NONE: Input = { up: false, down: false, left: false, right: false };
@@ -63,25 +64,27 @@ describe('rover physics', () => {
 });
 
 describe('rover battery (fictional training values)', () => {
-  it('drains while idle in sunlight, drains faster in shadow, and charges on the pad', () => {
+  it('sunlight trickle-charges while stopped and barely drains while driving; shadow drains fast; the pad charges fastest', () => {
     const sun = { ...createRover(MAP), x: 900, y: 200 };
     expect(inShadow(MAP, 900, 200)).toBe(false);
     const resting = stepRover(MAP, sun, NONE, 1);
-    expect(resting.rover.battery).toBeCloseTo(80 - ROVER.sunDrain, 5);
-    expect(resting.rate).toBeLessThan(0);
-    expect(ROVER.sunDrain).toBeLessThan(ROVER.shadowDrain);
+    expect(resting.rover.battery).toBeCloseTo(80 + ROVER.sunCharge, 5);
+    expect(resting.rate).toBeGreaterThan(0);
     const sunlightDrive = stepRover(MAP, { ...sun, vx: 100 }, NONE, 0.1);
-    expect(sunlightDrive.rate).toBeCloseTo(-ROVER.sunDrain - ROVER.moveDrain, 5);
+    expect(sunlightDrive.rate).toBeCloseTo(ROVER.sunCharge - ROVER.moveDrain, 5);
+    expect(sunlightDrive.rate).toBeLessThan(0); // driving still uses a little more than the solar deck makes
     const sh = MAP.shadows[0];
     const dark = { ...createRover(MAP), x: sh.x + 100, y: sh.y - 200 };
     expect(inShadow(MAP, dark.x, dark.y)).toBe(true);
-    expect(stepRover(MAP, dark, NONE, 1).rover.battery).toBeCloseTo(78.5, 5);
-    expect(stepRover(MAP, { ...createRover(MAP), x: MAP.charger.x, y: MAP.charger.y, battery: 50 }, NONE, 1).rover.battery).toBeCloseTo(62, 5);
+    expect(stepRover(MAP, dark, NONE, 1).rover.battery).toBeCloseTo(80 - ROVER.shadowDrain, 5);
+    expect(stepRover(MAP, { ...createRover(MAP), x: MAP.charger.x, y: MAP.charger.y, battery: 50 }, NONE, 1).rover.battery).toBeCloseTo(50 + ROVER.padCharge, 5);
     const res = stepRover(MAP, { ...dark, vx: 100 }, NONE, 0.1);
-    expect(res.rate).toBeCloseTo(-1.75, 5);
+    expect(res.rate).toBeCloseTo(-ROVER.shadowDrain - ROVER.moveDrain, 5);
+    // a full minute parked in the sun gives only a little back: the pad is the real charger
+    expect(ROVER.sunCharge * 60).toBeLessThan(ROVER.padCharge * 2);
   });
 
-  it('increases battery drain inside the newly expanded shadow and restores the sunlight rate across its edge', () => {
+  it('drains inside the shadow zone and switches back to the sunlight rate across its edge', () => {
     const edge = MAP.shadows[0];
     const legacySunlight = { ...createRover(MAP), x: edge.x - 365, y: edge.y };
     const inside = stepRover(MAP, legacySunlight, NONE, 1);
@@ -89,7 +92,7 @@ describe('rover battery (fictional training values)', () => {
     expect(inside.rate).toBe(-ROVER.shadowDrain);
     const outside = stepRover(MAP, { ...legacySunlight, x: edge.x - edge.r }, NONE, 1);
     expect(outside.inShadow).toBe(false);
-    expect(outside.rate).toBe(-ROVER.sunDrain);
+    expect(outside.rate).toBe(ROVER.sunCharge);
   });
 
   it('uses only the stronger drain in overlapping shadow zones and prioritizes the charging pad', () => {
@@ -101,16 +104,20 @@ describe('rover battery (fictional training values)', () => {
     expect(charge.charging).toBe(true);
     expect(charge.rover.battery).toBe(50 + ROVER.padCharge);
   });
-  it('route choice matters: shadowed shortcut is faster, sunny detour saves battery', () => {
+  it('route choice matters (Hard values): the shadow shortcut is faster, the sunny detour clearly saves battery', () => {
     const target: [number, number] = [MAP.sites.solarB.x, MAP.sites.solarB.y];
-    const north = drive(createRover(MAP), [[1100, 700], [1350, 380], [1700, 380], [1850, 560], target]);
-    const south = drive(createRover(MAP), [[1150, 1080], [1600, 1110], [2000, 1080], [2200, 820], target]);
+    const short = driveRoute(createRover(MAP), ROUTES.shadow);
+    const sunny = driveRoute(createRover(MAP), ROUTES.sunny);
     // eslint-disable-next-line no-console
-    console.log('[route] north', north.t.toFixed(1), 's battery', north.r.battery.toFixed(1), '| south', south.t.toFixed(1), 's battery', south.r.battery.toFixed(1));
-    expect(Math.hypot(north.r.x - target[0], north.r.y - target[1])).toBeLessThan(40);
-    expect(Math.hypot(south.r.x - target[0], south.r.y - target[1])).toBeLessThan(40);
-    expect(north.t).toBeLessThan(south.t);
-    expect(north.r.battery).toBeLessThan(south.r.battery);
+    console.log('[route M1] shadow', short.time.toFixed(1), 's battery', short.rover.battery.toFixed(1), `(shadow ${short.zones[1].toFixed(1)} s)`,
+      '| sunny', sunny.time.toFixed(1), 's battery', sunny.rover.battery.toFixed(1), `(shadow ${sunny.zones[1].toFixed(1)} s)`);
+    for (const r of [short, sunny]) expect(Math.hypot(r.rover.x - target[0], r.rover.y - target[1])).toBeLessThan(40);
+    expect(short.time).toBeLessThan(sunny.time);
+    expect(short.zones[1]).toBeGreaterThan(sunny.zones[1] * 2);
+    expect(sunny.rover.battery - short.rover.battery).toBeGreaterThan(7); // was ≈0.6 after the shadow expansion
+    // the classic route around the crater's north side is in shadow too, and costs even more
+    const north = driveRoute(createRover(MAP), [[1100, 700], [1350, 380], [1700, 380], [1850, 560], target]);
+    expect(sunny.rover.battery - north.rover.battery).toBeGreaterThan(10);
   });
 });
 
@@ -223,12 +230,13 @@ describe('mission 2 map routes', () => {
 });
 
 describe('mission 3: science survey terrain', () => {
-  it('the permanently shadowed crater floor drains −3/s (training value)', () => {
+  it('the permanently shadowed crater floor drains fastest (training value)', () => {
     const s = MAP.sites.sample1;
     expect(shadowLevel(MAP, s.x, s.y)).toBe(2);
     const r = stepRover(MAP, { ...createRover(MAP), x: s.x, y: s.y }, NONE, 1);
     expect(r.deep).toBe(true);
-    expect(r.rover.battery).toBeCloseTo(77, 5);
+    expect(r.rover.battery).toBeCloseTo(80 - ROVER.deepDrain, 5);
+    expect(ROVER.deepDrain).toBeGreaterThan(ROVER.shadowDrain);
     expect(shadowLevel(MAP, MAP.sites.sample2.x, MAP.sites.sample2.y)).toBe(0); // sunny east site
     expect(shadowLevel(MAP, MAP.sites.sample3.x, MAP.sites.sample3.y)).toBe(1); // moderate shadow
   });

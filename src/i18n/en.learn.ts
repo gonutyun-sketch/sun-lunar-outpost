@@ -87,6 +87,17 @@ export const enLearn = {
   'warn.tryOtherChoice.easy': 'Your emergency choice also uses power. If you cannot switch anything else off, try the other choice — it is allowed!',
   'warn.choiceNeeded.easy': 'An emergency is waiting for your choice. Pick one of the two answers at the top of this panel.',
 
+  // ---------- Mission 1 route guide ----------
+  'ex.route.title': 'There are two ways to the solar array!',
+  'ex.route.shadow': 'Shadow shortcut (red): about {t} s, uses about {b} battery. You arrive fast, but in the dark the battery drains quickly.',
+  'ex.route.sunny': 'Sunny detour (yellow): about {t} s, uses about {b} battery. A little longer, but sunlight saves battery.',
+  'ex.route.back': 'The repair spot is in shadow — keep enough battery to drive home after the repair!',
+  'ex.route.short': 'Shadow shortcut ≈ {t1} s / −{b1} battery · sunny detour ≈ {t2} s / −{b2}. The repair spot is in shadow: keep enough for the way back.',
+  'ex.route.hard': 'The short way crosses the crater shadow. Plan your return before you leave.',
+  'ex.route.note': 'Estimates from the game’s rover simulation for this difficulty (training values, not NASA data).',
+  'ex.route.mapAria': 'Map of Mission 1: dark circles are shadow zones; the red line is the shadow shortcut, the yellow line the sunny detour',
+  'ex.route.legendDock': 'DOCK',
+  'ex.route.legendSite': 'SEGMENT B',
   // ---------- Rover help ----------
   'ex.diff': 'Difficulty: {name} · rover starting battery {b}',
   'ex.easy.solarRepair': 'First mission tip: drive to the flashing yellow ring (follow the arrow at the screen edge), press E there, then turn the yellow tiles. The faint dotted lines show how each tile should point. Then drive back to the dock.',
@@ -214,7 +225,7 @@ export const enLearn = {
   'sci.terrain.m': 'Height maps from LOLA help planners choose safe routes and landing sites. On the ground, a rover adds close-up detail that orbiters cannot see.',
   'sci.route.t': 'Battery and route',
   'sci.route.s': 'A short route through shadow can cost more battery than a longer route in the sun.',
-  'sci.route.m': 'In shadow there is no sunlight for solar charging and electronics must be heated. The numbers in the rover game (for example −1.5/s in shadow) are fictional training values chosen for gameplay, but the trade-off is real: plan a way back before the battery runs low.',
+  'sci.route.m': 'In shadow there is no sunlight for solar charging and electronics must be heated. The numbers in the rover game (for example −2/s in shadow, and a small +0.2/s charge when the rover stops in sunlight) are fictional training values chosen for gameplay, but the trade-off is real: plan a way back before the battery runs low.',
   'sci.history.t': 'Rovers on the Moon',
   'sci.history.s': 'The Soviet robot Lunokhod 1 drove on the Moon in 1970. Apollo 15, 16 and 17 astronauts drove the Lunar Roving Vehicle.',
   'sci.history.m': 'Robotic rovers from several countries have explored the Moon since then. Future missions plan rovers that can drive near the South Pole and search for ice.',

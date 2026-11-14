@@ -1210,3 +1210,32 @@ html.touch .ex-controls .action-btn { touch-action: none; }
 @media (prefers-reduced-motion: reduce) { .diff-card { transition: none; } }
 @media (pointer: coarse) { .coach-close, .qa-go { min-height: 44px; min-width: 44px; } }
 html.touch .coach-close, html.touch .qa-go { min-height: 44px; min-width: 44px; }
+
+/* Mission 1 route guide (briefing) */
+.ex-route { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 10px; align-items: start; margin: 6px 0 8px; padding: 8px; background: #0f1828; border: 1px solid #2c3a52; border-radius: var(--radius); text-align: left; }
+.ex-route-map { width: 100%; height: auto; display: block; border: 1px solid #364257; background: #3b3a40; }
+.ex-route-map .rm-ground { fill: #77737a; }
+.ex-route-map .rm-shadow { fill: #1d2a45; opacity: 0.78; }
+.ex-route-map .rm-deep { fill: #0b1226; opacity: 0.9; }
+.ex-route-map .rm-crater { fill: #2b2a33; stroke: #9a96a0; stroke-width: 8; }
+.ex-route-map .rm-rock { fill: #aaa5ad; }
+.ex-route-map .rm-panel { fill: #3a5f8a; }
+.ex-route-map .rm-line { fill: none; stroke-width: 22; stroke-linejoin: round; stroke-linecap: round; }
+.ex-route-map .rm-line.shadow { stroke: #ff7f88; stroke-dasharray: 40 30; }
+.ex-route-map .rm-line.sunny { stroke: #f4ca65; }
+.ex-route-map .rm-dock { fill: #77cde0; }
+.ex-route-map .rm-site { fill: #ffb1ad; stroke: #fff; stroke-width: 8; }
+.ex-route-map .rm-label { fill: #fff; font: 700 64px var(--body); text-anchor: middle; paint-order: stroke; stroke: #111827; stroke-width: 14px; }
+.ex-route-text { display: grid; gap: 4px; font-size: 12.5px; line-height: 1.45; color: #dbe6f3; }
+.ex-route-text b { font-size: 13px; color: #f1d390; }
+.ex-route-text p { margin: 0; }
+.ex-route-text i { display: inline-block; width: 12px; height: 4px; margin: 0 6px 3px 0; vertical-align: middle; }
+.ex-route-text .r-shadow i { background: #ff7f88; }
+.ex-route-text .r-sunny i { background: #f4ca65; }
+.ex-route-text .r-back { color: #a8ecd0; }
+.ex-route-text small { color: var(--muted); font-size: 10.5px; }
+.ex-tip.ex-route-hard { color: #c9d6e6 !important; }
+@media (max-width: 560px), (max-height: 500px) {
+  .ex-route { grid-template-columns: 1fr; }
+  .ex-route-map { max-width: 240px; }
+}
