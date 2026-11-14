@@ -9,7 +9,8 @@ import { useI18n } from '../i18n/I18n';
 import type { Key } from '../i18n/translate';
 import { createCircuit, isSolved, powered, rotateTile, N, E, S, W, type Circuit } from '../rover/circuit';
 import { createPressureGame, inBand, P, stepPressure, type PressureGame } from '../rover/pressure';
-import { drawFrame, type Marker, type Particle } from '../rover/render';
+import { addTrack, batteryLevel, burst, createVis, emit, pruneTracks, snapDirection, stepVis, trackMotion, updateCamera, type BurstKind, type Vis } from '../rover/fx';
+import { drawFrame, type Marker } from '../rover/render';
 import { createRover, dist, ROVER, stepRover, type Input, type Rover } from '../rover/sim';
 import { cameraZoom, joystickVector, knobOffset, renderDpr } from '../rover/touch';
 import { MAP, type Site } from '../rover/world';
@@ -69,6 +70,11 @@ const prefersTouch = () =>
 
 const OVERLAY: StepKind[] = ['circuit', 'pressure'];
 
+/** Respect the OS "reduce motion" setting (no shake, particles or vibration; static feedback instead). */
+const prefersReducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+/** Short haptic pulse on phones that support it (ignored elsewhere). */
+const buzz = (pattern: number | number[]) => { try { navigator.vibrate?.(pattern); } catch { /* not supported */ } };
+
 export function ExploreScreen({ missionId, onExit, fx }: Props) {
   const { t } = useI18n();
   const def = MISSIONS[missionId];
@@ -77,8 +83,13 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const rover = useRef<Rover>(createRover(MAP));
   const input = useRef<Input>({ up: false, down: false, left: false, right: false });
-  const particles = useRef<Particle[]>([]);
+  /** Visual-only state (particles, tracks, camera, bursts). Never read by the physics or mission rules. */
+  const vis = useRef<Vis>(createVis());
   const shake = useRef(0);
+  const motion = fx && !prefersReducedMotion();
+  const motionRef = useRef(motion);
+  motionRef.current = motion;
+  const touchRef = useRef(false);
   const time = useRef(0);
 
   const [phase, setPhaseState] = useState<Phase>('brief');
@@ -96,6 +107,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   const [flash, setFlash] = useState<string | null>(null);
   const [hud, setHud] = useState<Hud>({ battery: ROVER.batteryStart, rate: 0, zone: 'sun', near: null, time: 0, drill: 0 });
   const [touchUI, setTouchUI] = useState(prefersTouch);
+  touchRef.current = touchUI;
   const [portrait, setPortrait] = useState(() => typeof window !== 'undefined' && window.innerHeight > window.innerWidth);
   const viewSize = useRef({ w: 0, h: 0 });
 
@@ -147,6 +159,15 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     else setStep(n);
   };
   const say = (msg: string, ms = 1300) => { setFlash(msg); setTimeout(() => setFlash((f) => (f === msg ? null : f)), ms); };
+  /** Feedback ring (+ optional text) on the map at a world position. */
+  const pop = (kind: BurstKind, x: number, y: number, text?: string) => burst(vis.current, { kind, x, y, t0: performance.now() / 1000, text });
+  const sparkle = (x: number, y: number, n = 12) => {
+    if (!motionRef.current) return;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      emit(vis.current, { x, y, vx: Math.cos(a) * 110, vy: Math.sin(a) * 110, life: 1, decay: 1.4, size: 4, kind: 'sparkle' });
+    }
+  };
 
   /** Interaction targets for the current step (sites the rover can use E on). */
   const targetSites = useCallback((): SiteId[] => {
@@ -160,7 +181,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
 
   const restart = useCallback(() => {
     rover.current = createRover(MAP);
-    particles.current = [];
+    vis.current = createVis();
     time.current = 0;
     cargo.current = false;
     setCircuit(createCircuit());
@@ -182,14 +203,19 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     const s = def.steps[stepRef.current];
     if (!s || phaseRef.current !== 'play') return;
     const near = targetSites().find((id) => dist(rover.current, MAP.sites[id]) <= MAP.sites[id].r);
-    if (!near) return;
+    if (!near) {
+      // pressed E too far away: say so instead of silently ignoring it
+      if (s.kind !== 'collect' && targetSites().length) { say(t('ex.fx.far'), 1000); if (touchRef.current) buzz(20); }
+      return;
+    }
+    const site = MAP.sites[near];
     rover.current = { ...rover.current, vx: 0, vy: 0 };
-    if (s.kind === 'goto') next();
-    else if (s.kind === 'pickup') { cargo.current = true; say(t('ex.o2.picked')); next(); }
-    else if (s.kind === 'dock') next();
+    if (s.kind === 'goto') { pop('info', site.x, site.y); next(); }
+    else if (s.kind === 'pickup') { cargo.current = true; pop('ok', site.x, site.y, t('ex.fx.loaded')); sparkle(site.x, site.y, 8); say(t('ex.o2.picked')); next(); }
+    else if (s.kind === 'dock') { pop('ok', site.x, site.y); next(); }
     else if (s.kind === 'scan') {
-      if (near === faulty()) { say(t('ex.o2.found')); next(); }
-      else if (!scannedRef.current.includes(near)) { setScanned([...scannedRef.current, near]); say(t('ex.o2.normal')); }
+      if (near === faulty()) { pop('warn', site.x, site.y, t('ex.fx.leak')); say(t('ex.o2.found')); if (touchRef.current) buzz([25, 40, 25]); next(); }
+      else if (!scannedRef.current.includes(near)) { setScanned([...scannedRef.current, near]); pop('info', site.x, site.y, t('ex.o2.normalTag')); say(t('ex.o2.normal')); }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [def, targetSites, t]);
@@ -205,7 +231,15 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     rover.current = { ...rover.current, battery: Math.max(0, rover.current.battery - ROVER.rotateCost) };
     if (isSolved(n)) {
       setFlash(t('ex.pz.solved'));
-      setTimeout(() => { setFlash(null); if (def.steps[stepRef.current]?.kind === 'circuit') next(); }, 1100);
+      setTimeout(() => {
+        setFlash(null);
+        if (def.steps[stepRef.current]?.kind === 'circuit') {
+          vis.current.solarFixedAt = performance.now() / 1000;
+          const sb = MAP.sites.solarB;
+          pop('ok', sb.x, sb.y, t('ex.fx.online'));
+          next();
+        }
+      }, 1100);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [def, t]);
@@ -296,11 +330,16 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
       base: t('ex.map.base'), oxygen: t('ex.map.oxygen'), samples: t('ex.map.samples'), depot: t('ex.map.depot'),
     };
     let alive = true;
+    let idle = 1, bumpCool = 0, trackPrune = 0, prevNear: SiteId | null = null, prevLevel = batteryLevel(rover.current.battery);
     const frame = (now: number) => {
       // stop if the screen was closed (a late frame can arrive after unmount)
       if (!alive || !wrapRef.current || !canvasRef.current) return;
-      const dt = Math.min(0.05, (now - last) / 1000);
+      // dt is capped, so a long pause (hidden tab, slow device) never makes the rover jump or drain at once
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
       last = now;
+      const tNow = now / 1000;
+      const v = vis.current;
+      const mo = motionRef.current;
       const p = phaseRef.current;
       const kind = def.steps[stepRef.current]?.kind;
       const active = p === 'play' && !pausedRef.current;
@@ -310,18 +349,42 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
         res = stepRover(MAP, rover.current, input.current, dt, frozen);
         rover.current = res.rover;
         time.current += dt;
-        if (res.bumped && Math.hypot(res.rover.vx, res.rover.vy) > 40) shake.current = Math.min(6, shake.current + 3);
-        if (res.moving && fx && Math.random() < 0.6) {
-          const back = res.rover.angle + Math.PI;
-          particles.current.push({ x: res.rover.x + Math.cos(back) * 20, y: res.rover.y + Math.sin(back) * 20, vx: Math.cos(back) * 20 + (Math.random() - 0.5) * 30, vy: Math.sin(back) * 20 + (Math.random() - 0.5) * 30, life: 1 });
+        const R = res.rover;
+        trackMotion(v, R, dt);
+        if (res.moving) addTrack(v, R, tNow);
+        // soft bump: a short shake, dust and sparks at the contact side (rate-limited)
+        bumpCool = Math.max(0, bumpCool - dt);
+        if (res.bumped && v.speed > 40 && bumpCool === 0) {
+          bumpCool = 0.35;
+          if (mo) {
+            shake.current = Math.min(6, shake.current + 3);
+            const fx0 = R.x + Math.cos(R.angle) * 22, fy0 = R.y + Math.sin(R.angle) * 22;
+            for (let i = 0; i < 5; i++) emit(v, { x: fx0, y: fy0, vx: (Math.random() - 0.5) * 160, vy: (Math.random() - 0.5) * 160, life: 1, decay: 2.6, size: 3, kind: i < 2 ? 'spark' : 'dust' });
+            if (touchRef.current) buzz(15);
+          }
+        }
+        // wheel dust: more when fast or accelerating hard
+        if (res.moving && mo) {
+          const rate = 0.35 + 0.5 * Math.min(1, v.speed / ROVER.maxSpeed) + (Math.abs(v.accel) > 300 ? 0.3 : 0);
+          for (const side of [-1, 1]) {
+            if (Math.random() > rate) continue;
+            const bx = R.x - Math.cos(R.angle) * 18 - Math.sin(R.angle) * 17 * side, by = R.y - Math.sin(R.angle) * 18 + Math.cos(R.angle) * 17 * side;
+            emit(v, { x: bx, y: by, vx: -R.vx * 0.15 + (Math.random() - 0.5) * 40, vy: -R.vy * 0.15 + (Math.random() - 0.5) * 40, life: 1, decay: 1.5, size: 2 + Math.random() * 2, kind: 'dust' });
+          }
         }
         if (kind === 'pressure') {
           const r = stepPressure(pressureRef.current, valveSel.current, valveDir.current, dt);
           pressureRef.current = r.game;
-          if (r.vented !== null) { setVentFlash(r.vented); setTimeout(() => setVentFlash(null), 900); }
+          if (r.vented !== null) { setVentFlash(r.vented); setTimeout(() => setVentFlash(null), 900); if (touchRef.current) buzz(40); }
           gaugeTimer += dt;
           if (gaugeTimer > 1 / 30 || r.game.done) { gaugeTimer = 0; setGauges(r.game); }
-          if (r.game.done) { o2Done.current = true; valveDir.current = 0; say(t('ex.o2.stable'), 1800); next(); }
+          if (r.game.done) {
+            o2Done.current = true; valveDir.current = 0;
+            v.oxygenFixedAt = tNow;
+            const pl = MAP.blocks[5];
+            if (pl) pop('ok', pl.x + pl.w / 2, pl.y + pl.h / 2, t('ex.fx.o2ok'));
+            say(t('ex.o2.stable'), 1800); next();
+          }
         }
         if (kind === 'collect') {
           const here = (def.steps[stepRef.current].sites ?? []).find((id) => !collectedRef.current.includes(id) && dist(rover.current, MAP.sites[id]) <= MAP.sites[id].r);
@@ -329,47 +392,89 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
           if (here && still && drillHeld.current) {
             if (drillSite.current !== here) { drillSite.current = here; drill.current = 0; }
             drill.current += dt / DRILL_TIME;
+            // drilling: regolith spray around the rover
+            if (mo && Math.random() < 0.7) {
+              const a = Math.random() * Math.PI * 2;
+              emit(v, { x: R.x + Math.cos(a) * 8, y: R.y + Math.sin(a) * 8, vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, life: 1, decay: 1.8, size: 2.5, kind: 'dust' });
+            }
             if (drill.current >= 1) {
               drill.current = 0;
               const got = [...collectedRef.current, here];
               collectedRef.current = got;
               setCollected(got);
-              say(t('ex.sc.got', { n: got.length, total: 3 }));
-              if (got.length >= 3) next();
+              const site = MAP.sites[here];
+              pop('ok', site.x, site.y, t('ex.fx.sample', { n: got.length, total: 3 }));
+              sparkle(site.x, site.y, 14);
+              if (touchRef.current) buzz(30);
+              if (got.length >= 3) {
+                pop('big', R.x, R.y, t('ex.fx.allSamples'));
+                sparkle(R.x, R.y, 24);
+                say(t('ex.sc.all'), 2600);
+                next();
+              } else say(t('ex.sc.got', { n: got.length, total: 3 }));
             }
           } else if (!here || !still) {
             drill.current = 0; // moving away or driving cancels drilling
           }
         }
+        // battery warnings when crossing 25 % and 10 % (once per crossing)
+        const lvl = batteryLevel(R.battery);
+        if (lvl > prevLevel) {
+          pop('warn', R.x, R.y);
+          say(t(lvl === 2 ? 'ex.warn.crit' : 'ex.warn.low'), 2200);
+          if (touchRef.current) buzz(lvl === 2 ? [40, 60, 40] : 30);
+        }
+        prevLevel = lvl;
         if (rover.current.battery <= 0) { setPhase('failed'); setFailures((f) => f + 1); }
       }
       if (def.id === 'solarRepair') solarDone.current = isSolved(circuitRef.current);
-      particles.current = particles.current.filter((q) => (q.life -= dt * 1.4) > 0).map((q) => ({ ...q, x: q.x + q.vx * dt, y: q.y + q.vy * dt }));
-      shake.current = fx ? Math.max(0, shake.current - dt * 20) : 0;
+      // gas from the leaking valve (Mission 2 clue)
+      const leakSite = def.id === 'oxygenRepair' && !o2Done.current ? MAP.sites[faulty()] : null;
+      if (leakSite && mo && Math.random() < dt * 9) {
+        emit(v, { x: leakSite.x + (Math.random() - 0.5) * 8, y: leakSite.y - 6, vx: 18 + Math.random() * 22, vy: -30 - Math.random() * 25, life: 1, decay: 0.7, size: 4, kind: 'gas' });
+      }
+      stepVis(v, dt, tNow);
+      trackPrune += dt;
+      if (trackPrune > 1) { trackPrune = 0; pruneTracks(v, tNow); }
+      shake.current = mo ? Math.max(0, shake.current - dt * 20) : 0;
 
       const box = viewSize.current;
       if (!box.w) measure();
-      const dpr = cv.width / Math.max(1, box.w);
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const zoom = cameraZoom(box.w, box.h);
+      updateCamera(v.cam, rover.current, box.w / zoom, box.h / zoom, MAP.w, MAP.h, dt);
 
       let nearId: SiteId | null = null;
       const markers: Marker[] = targetSites().map((id) => {
         const s = MAP.sites[id];
         const near = dist(rover.current, s) <= s.r;
-        if (near) nearId = id;
         const done = (kind === 'scan' && scannedRef.current.includes(id)) || (kind === 'collect' && collectedRef.current.includes(id));
+        if (near) nearId = id;
         return { x: s.x, y: s.y, r: s.r, state: done ? 'done' : near ? 'near' : 'goal', note: done ? t(kind === 'collect' ? 'ex.sc.doneTag' : 'ex.o2.normalTag') : undefined };
       });
+      // arriving at a target: a ring + short buzz, right away (before pressing anything)
+      if (nearId && nearId !== prevNear && active) {
+        const ns = MAP.sites[nearId as SiteId];
+        const done = (kind === 'scan' && scannedRef.current.includes(nearId)) || (kind === 'collect' && collectedRef.current.includes(nearId));
+        if (!done) { pop('ping', ns.x, ns.y); if (touchRef.current) buzz(12); }
+      }
+      prevNear = nearId;
       // the faulty valve stays marked while the pressure panel is open
       if (kind === 'pressure') { const s = MAP.sites[faulty()]; markers.push({ x: s.x, y: s.y, r: s.r, state: 'near' }); }
-      const leakSite = def.id === 'oxygenRepair' && !o2Done.current ? MAP.sites[faulty()] : null;
-      drawFrame(g, box.w, box.h, MAP, rover.current, {
-        t: now / 1000, targets: markers, solarRepaired: def.id !== 'solarRepair' || solarDone.current,
-        oxygenRepaired: def.id !== 'oxygenRepair' || o2Done.current, leak: leakSite, cargo: cargo.current || collectedRef.current.length > 0,
-        samples: def.id === 'sampleSurvey' ? (['sample1', 'sample2', 'sample3'] as SiteId[]).map((id) => ({ x: MAP.sites[id].x, y: MAP.sites[id].y, done: collectedRef.current.includes(id) })) : [],
-        drill: drill.current,
-        inShadow: res.inShadow, shake: shake.current, particles: particles.current, labels, zoom: cameraZoom(box.w, box.h),
-      });
+
+      // Full frame rate while driving; when paused or behind a menu/briefing, redraw at ~12 fps to save battery
+      idle += dt;
+      if (active || idle > 1 / 12) {
+        idle = 0;
+        const dpr = cv.width / Math.max(1, box.w);
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawFrame(g, box.w, box.h, MAP, rover.current, {
+          t: tNow, targets: markers, solarRepaired: def.id !== 'solarRepair' || solarDone.current,
+          oxygenRepaired: def.id !== 'oxygenRepair' || o2Done.current, leak: leakSite, cargo: cargo.current || collectedRef.current.length > 0,
+          samples: def.id === 'sampleSurvey' ? (['sample1', 'sample2', 'sample3'] as SiteId[]).map((id) => ({ x: MAP.sites[id].x, y: MAP.sites[id].y, done: collectedRef.current.includes(id) })) : [],
+          drill: drill.current,
+          inShadow: res.inShadow, deep: res.deep, shake: shake.current, vis: v, motion: mo, labels, zoom,
+        });
+      }
       hudTimer += dt;
       if (hudTimer > 0.1) {
         hudTimer = 0;
@@ -383,7 +488,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   }, [t, def, targetSites, fx]);
 
   // ---------- touch controls ----------
-  const onStick = (ax: number, ay: number) => { input.current.ax = ax; input.current.ay = ay; };
+  const onStick = (ax: number, ay: number) => { const d = snapDirection(ax, ay); input.current.ax = d.x; input.current.ay = d.y; };
   const onActionDown = () => {
     if (def.steps[stepRef.current]?.kind === 'collect') drillHeld.current = true;
     else interact();
@@ -425,7 +530,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
             <span key={i} className={`ex-step ${i < doneIdx ? 'done' : i === doneIdx && playing ? 'now' : ''}`}>{i + 1}. {t(s.chip, { n: collected.length, total: 3 })}</span>
           ))}
         </div>
-        <div className={`ex-battery ${low ? 'low' : ''}`} title={t('ex.batteryTip')}>
+        <div className={`ex-battery ${low ? 'low' : ''} ${hud.battery < 10 ? 'crit' : ''}`} title={t('ex.batteryTip')}>
           <div className="ex-bat-head">
             <span>{t('ex.battery')}</span>
             <b>{Math.round(hud.battery)}</b>
@@ -688,11 +793,13 @@ function CircuitView({ c, cursor, onRotate, labels }: { c: Circuit; cursor: numb
       .map(([, x, yy], k) => <line key={k} x1={cx} y1={cy} x2={x as number} y2={yy as number} />);
   };
   return (
-    <svg className="circuit" viewBox={`0 0 ${O * 2 + S0 * 3} ${S0 * 3 + 20}`} role="group">
+    <svg className={`circuit ${solved ? 'solved' : ''}`} viewBox={`0 0 ${O * 2 + S0 * 3} ${S0 * 3 + 20}`} role="group">
       <text x={O / 2} y={S0 * 1.5 - 22} textAnchor="middle" className="cz-label">{labels.src}</text>
       <line x1={8} y1={S0 * 1.5} x2={O} y2={S0 * 1.5} className="cz-wire on" />
+      <line x1={8} y1={S0 * 1.5} x2={O} y2={S0 * 1.5} className="cz-flow-wire" />
       <text x={O * 1.5 + S0 * 3} y={S0 * 2.5 - 22} textAnchor="middle" className="cz-label">{labels.sink}</text>
       <line x1={O + S0 * 3} y1={S0 * 2.5} x2={O * 2 + S0 * 3 - 8} y2={S0 * 2.5} className={`cz-wire ${solved ? 'on' : ''}`} />
+      {solved && <line x1={O + S0 * 3} y1={S0 * 2.5} x2={O * 2 + S0 * 3 - 8} y2={S0 * 2.5} className="cz-flow-wire" />}
       {c.tiles.map((tile, i) => {
         const r = Math.floor(i / 3), col = i % 3;
         const x = O + col * S0, yy = r * S0;
@@ -701,6 +808,7 @@ function CircuitView({ c, cursor, onRotate, labels }: { c: Circuit; cursor: numb
             onClick={() => tile.rotatable && onRotate(i)} role={tile.rotatable ? 'button' : undefined} tabIndex={-1}>
             <rect x={x + 3} y={yy + 3} width={S0 - 6} height={S0 - 6} rx={8} />
             <g className="cz-path">{seg(tile.mask, x + S0 / 2, yy + S0 / 2)}</g>
+            {on.has(i) && <g className="cz-flow" aria-hidden>{seg(tile.mask, x + S0 / 2, yy + S0 / 2)}</g>}
             {tile.mask !== 0 && <circle cx={x + S0 / 2} cy={yy + S0 / 2} r={6} />}
           </g>
         );

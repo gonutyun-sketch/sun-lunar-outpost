@@ -84,8 +84,8 @@ export function isValidState(x: unknown, cfg: MissionConfig): x is GameState {
     isNum(h.solar) && isNum(h.illumination) && isNum(h.demand) && Array.isArray(h.demandBreakdown) &&
     typeof h.radiation === 'string');
   if (!okHistory) return false;
-  // History must be consistent with the current shift.
-  if (x.status === 'playing' && x.history.length !== x.shift - 1) return false;
+  // History can never be ahead of the current shift (entries are checked in order above).
+  if (x.history.length > x.shift) return false;
   return true;
 }
 
