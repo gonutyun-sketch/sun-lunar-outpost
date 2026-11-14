@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createCircuit, isSolved, powered, rotateMask, rotateTile, N, E, S, W } from './circuit';
 import { createRover, ROVER, stepRover, type Input, type Rover } from './sim';
-import { inShadow, MAP } from './world';
+import { inShadow, MAP, shadowLevel } from './world';
 
 const NONE: Input = { up: false, down: false, left: false, right: false };
 const hold = (dirs: Partial<Input>): Input => ({ ...NONE, ...dirs });
@@ -63,10 +63,15 @@ describe('rover physics', () => {
 });
 
 describe('rover battery (fictional training values)', () => {
-  it('charges in sunlight, drains in shadow, extra drain while moving, fast on the pad', () => {
+  it('drains while idle in sunlight, drains faster in shadow, and charges on the pad', () => {
     const sun = { ...createRover(MAP), x: 900, y: 200 };
     expect(inShadow(MAP, 900, 200)).toBe(false);
-    expect(stepRover(MAP, sun, NONE, 1).rover.battery).toBeCloseTo(81, 5);
+    const resting = stepRover(MAP, sun, NONE, 1);
+    expect(resting.rover.battery).toBeCloseTo(80 - ROVER.sunDrain, 5);
+    expect(resting.rate).toBeLessThan(0);
+    expect(ROVER.sunDrain).toBeLessThan(ROVER.shadowDrain);
+    const sunlightDrive = stepRover(MAP, { ...sun, vx: 100 }, NONE, 0.1);
+    expect(sunlightDrive.rate).toBeCloseTo(-ROVER.sunDrain - ROVER.moveDrain, 5);
     const sh = MAP.shadows[0];
     const dark = { ...createRover(MAP), x: sh.x + 100, y: sh.y - 200 };
     expect(inShadow(MAP, dark.x, dark.y)).toBe(true);
@@ -76,6 +81,26 @@ describe('rover battery (fictional training values)', () => {
     expect(res.rate).toBeCloseTo(-1.75, 5);
   });
 
+  it('increases battery drain inside the newly expanded shadow and restores the sunlight rate across its edge', () => {
+    const edge = MAP.shadows[0];
+    const legacySunlight = { ...createRover(MAP), x: edge.x - 365, y: edge.y };
+    const inside = stepRover(MAP, legacySunlight, NONE, 1);
+    expect(inside.inShadow).toBe(true);
+    expect(inside.rate).toBe(-ROVER.shadowDrain);
+    const outside = stepRover(MAP, { ...legacySunlight, x: edge.x - edge.r }, NONE, 1);
+    expect(outside.inShadow).toBe(false);
+    expect(outside.rate).toBe(-ROVER.sunDrain);
+  });
+
+  it('uses only the stronger drain in overlapping shadow zones and prioritizes the charging pad', () => {
+    const point = { ...createRover(MAP), x: 2225, y: 1340, battery: 50 };
+    expect(shadowLevel(MAP, point.x, point.y)).toBe(2);
+    expect(stepRover(MAP, point, NONE, 1).rate).toBe(-ROVER.deepDrain);
+    const testMap = { ...MAP, charger: { x: point.x, y: point.y, r: 40 } };
+    const charge = stepRover(testMap, point, NONE, 1);
+    expect(charge.charging).toBe(true);
+    expect(charge.rover.battery).toBe(50 + ROVER.padCharge);
+  });
   it('route choice matters: shadowed shortcut is faster, sunny detour saves battery', () => {
     const target: [number, number] = [MAP.sites.solarB.x, MAP.sites.solarB.y];
     const north = drive(createRover(MAP), [[1100, 700], [1350, 380], [1700, 380], [1850, 560], target]);
@@ -197,8 +222,6 @@ describe('mission 2 map routes', () => {
   });
 });
 
-import { shadowLevel } from './world';
-
 describe('mission 3: science survey terrain', () => {
   it('the permanently shadowed crater floor drains −3/s (training value)', () => {
     const s = MAP.sites.sample1;
@@ -210,7 +233,7 @@ describe('mission 3: science survey terrain', () => {
     expect(shadowLevel(MAP, MAP.sites.sample3.x, MAP.sites.sample3.y)).toBe(1); // moderate shadow
   });
 
-  /** Drive a sample loop, drilling 3 s at each site, then return to the dock. */
+  /** Drive a sample loop, drilling 4 s at each site, then return to the dock. */
   function survey(order: [number, number][][]) {
     let r = createRover(MAP), t = 0;
     for (const leg of order) {

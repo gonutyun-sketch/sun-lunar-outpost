@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MISSION } from '../game/config';
 import {
   activeExpeditions,
@@ -37,6 +37,7 @@ import {
 import { LangToggle, useI18n } from '../i18n/I18n';
 import type { Key, Params, T } from '../i18n/translate';
 import { BaseScene } from './BaseScene';
+import { useWarningQueue, WarningBanner, type MissionWarning } from './WarningBanner';
 
 interface Props {
   state: GameState;
@@ -47,6 +48,7 @@ interface Props {
   onExplore: (id: string) => void;
   fx: boolean;
   onToggleFx: () => void;
+  seenWarnings: Set<string>;
 }
 
 const COLORS: Record<keyof Resources, string> = {
@@ -211,11 +213,12 @@ function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState
   );
 }
 
-export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx, onToggleFx }: Props) {
+export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx, onToggleFx, seenWarnings }: Props) {
   const { t } = useI18n();
   const [report, setReport] = useState<ShiftReport | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   const [roverMenu, setRoverMenu] = useState(false);
+  const { warning, add: warn } = useWarningQueue();
 
   const outcome = useMemo(() => projectCurrentShift(state, MISSION), [state]);
   const warnings = useMemo(() => getWarnings(state, MISSION, outcome), [state, outcome]);
@@ -234,6 +237,26 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
   const damagePct = Math.round(solarDamageMult(state, MISSION) * 100);
   const o2DamagePct = Math.round(oxygenDamageMult(state, MISSION) * 100);
   const leak = oxygenLeak(state, MISSION);
+  const powerDeficit = outcome.habitatPowerFailure || outcome.optionalDeficit > 0;
+  const solarFaultStarted = outcome.solarDamaged && MISSION.expeditions.some(e => e.id === 'solarRepair' && e.fromShift === state.shift);
+  const oxygenFaultStarted = outcome.oxygenDamaged && MISSION.expeditions.some(e => e.id === 'oxygenRepair' && e.fromShift === state.shift);
+  useEffect(() => {
+    if (ended) return;
+    const next: MissionWarning[] = [];
+    if (event) {
+      next.push({ id: `emergency-${state.shift}`, tone: event.radiation ? 'critical' : 'caution',
+        title: `ev.${event.id}.title` as Key, action: 'notice.emergency.action' });
+    }
+    if (powerDeficit) {
+      next.push({ id: `power-${state.shift}`, tone: 'critical', title: 'notice.power.title',
+        action: outcome.habitatPowerFailure ? 'notice.habitat.action' : 'notice.power.action' });
+    }
+    if (solarFaultStarted) next.push({ id: 'solar-fault', tone: 'caution', title: 'notice.solar.title', action: 'notice.solar.action' });
+    if (oxygenFaultStarted) next.push({ id: 'oxygen-fault', tone: 'caution', title: 'notice.oxygen.title', action: 'notice.oxygen.action' });
+    const unseen = next.filter(({ id }) => !seenWarnings.has(id));
+    for (const { id } of unseen) seenWarnings.add(id);
+    warn(...unseen);
+  }, [ended, event, state.shift, powerDeficit, outcome.habitatPowerFailure, solarFaultStarted, oxygenFaultStarted, seenWarnings, warn]);
   const scene = useMemo(() => ({
     facilities: outcome.ran,
     sunlight: outcome.illumination,
@@ -266,6 +289,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
 
   return (
     <div className={`mission screen ${fx ? '' : 'no-fx'} ${event?.radiation && !ended ? 'rad-alert' : ''}`}>
+      <WarningBanner warning={warning} />
       {/* ---------- Top bar ---------- */}
       <header className="topbar panel">
         <div className="brand">

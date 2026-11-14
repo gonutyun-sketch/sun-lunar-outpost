@@ -70,13 +70,13 @@ export const MAP: WorldMap = {
     { x: 120, y: 160, w: 150, h: 100 }, // remote oxygen plant (north-west)
   ],
   shadows: [
-    { x: 1500, y: 560, r: 330 }, // crater shadow: short route to the farm passes through it
-    { x: 2190, y: 620, r: 190 }, // ridge shadow over the damaged segment B
-    { x: 1960, y: 1270, r: 300 }, // sample crater: outer shadow
-    { x: 1960, y: 1360, r: 250, deep: true }, // permanently shadowed crater floor (training zone, south side): heaters drain −3/s
-    { x: 1190, y: 1400, r: 240 }, // small-crater shadow around sample 3
-    { x: 420, y: 1300, r: 170 },
-    { x: 130, y: 360, r: 230 }, // north-west shadow: the short west gap and part of the O₂ plant
+    { x: 1500, y: 560, r: 405 }, // crater shadow: short route to the farm passes through it
+    { x: 2190, y: 620, r: 235 }, // ridge shadow over the damaged segment B
+    { x: 1960, y: 1270, r: 360 }, // sample crater: outer shadow
+    { x: 1960, y: 1360, r: 290, deep: true }, // permanently shadowed training area with heater load
+    { x: 1190, y: 1400, r: 290 }, // small-crater shadow around sample 3
+    { x: 420, y: 1300, r: 205 },
+    { x: 120, y: 380, r: 290 }, // north-west shadow: the west gap and O₂ plant
   ],
   charger: { x: 900, y: 1010, r: 42 },
   sites: {
@@ -102,9 +102,13 @@ export function inShadow(m: WorldMap, x: number, y: number): boolean {
 
 /** 0 = sunlit, 1 = shadow, 2 = permanently shadowed (deep) training zone. */
 export function shadowLevel(m: WorldMap, x: number, y: number): 0 | 1 | 2 {
-  let lvl: 0 | 1 | 2 = 0;
+  let lvl: 0 | 1 = 0;
   for (const s of m.shadows) {
-    if ((x - s.x) ** 2 + (y - s.y) ** 2 < s.r * s.r) lvl = s.deep ? 2 : lvl === 2 ? 2 : 1;
+    const dx = x - s.x;
+    const dy = y - s.y;
+    if (dx * dx + dy * dy >= s.r * s.r) continue;
+    if (s.deep) return 2;
+    lvl = 1;
   }
   return lvl;
 }

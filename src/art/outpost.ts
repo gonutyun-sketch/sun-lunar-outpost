@@ -24,33 +24,35 @@ export interface OutpostState {
   fresh?: UpgradeId | null;
 }
 
-const steel: Hull = ['#d9d8d3', '#9ca7b3', '#59677c'];
-const basalt: Hull = ['#888693', '#626478', '#45485d'];
-const graphite: Hull = ['#64758b', '#44536b', '#2a364c'];
+const steel: Hull = ['#dcd9d0', '#66768c', '#aaa8ab'];
+const basalt: Hull = ['#8d8892', '#50536a', '#71707d'];
+const graphite: Hull = ['#67788a', '#313e53', '#586477'];
 
-const anchors: Record<Structure, Point> = {
-  solar: [121, 184], oxygen: [207, 168], lab: [303, 154], greenhouse: [363, 178],
-  habitat: [258, 206], shelter: [335, 227], battery: [170, 222], dock: [235, 249],
+const anchors: Record<Exclude<Structure, 'solar'>, Point> = {
+  oxygen: [206, 166], lab: [303, 153], greenhouse: [142, 190],
+  habitat: [257, 208], shelter: [335, 227], battery: [171, 230], dock: [238, 254],
 };
 
 // HTML labels and Canvas art share these anchors in the authored 512×304 frame.
 export const outpostLabels = {
-  solar: [118, 198], oxygen: [193, 138], lab: [300, 112], greenhouse: [369, 140],
-  habitat: [266, 157], shelter: [356, 224],
+  solar: [421, 204], oxygen: [194, 114], lab: [298, 100], greenhouse: [119, 130],
+  habitat: [266, 149], shelter: [361, 228],
 } as const;
 
 const construction: Record<UpgradeId, Point> = {
-  solar: [113, 146], oxygen: [222, 165], battery: [183, 226],
+  solar: [388, 128], oxygen: [222, 165], battery: [184, 230],
 };
+const solarPositions: readonly Point[] = [[366, 153], [386, 173], [406, 193]];
+const solarExtension: readonly Point[] = [[358, 129], [399, 131]];
 
 const pipes: { id: Structure; points: Point[] }[] = [
-  { id: 'solar', points: [[123, 186], [155, 202], [196, 181]] },
+  { id: 'solar', points: [[388, 183], [361, 196], [320, 175], [288, 191]] },
   { id: 'oxygen', points: [[207, 167], [176, 182], [218, 203], [238, 193]] },
   { id: 'lab', points: [[303, 155], [285, 149], [241, 172], [266, 183]] },
-  { id: 'greenhouse', points: [[366, 176], [332, 193], [307, 180], [277, 195]] },
+  { id: 'greenhouse', points: [[142, 188], [169, 201], [196, 188], [236, 208]] },
   { id: 'shelter', points: [[332, 226], [298, 210], [274, 222], [252, 211]] },
-  { id: 'battery', points: [[169, 222], [193, 234], [232, 214]] },
-  { id: 'dock', points: [[235, 248], [214, 237], [244, 222]] },
+  { id: 'battery', points: [[171, 230], [190, 239], [234, 217]] },
+  { id: 'dock', points: [[238, 254], [211, 240], [244, 224]] },
 ];
 
 let backdrop: HTMLCanvasElement | undefined;
@@ -93,33 +95,35 @@ function terrain() {
     }
   }
   // Pixel clusters across the day side of the Earth, quantized along the terminator.
-  const earthX = 407, earthY = 52, radius = 26;
+  const earthX = 176, earthY = 54, radius = 24;
   for (let y = -radius; y <= radius; y++) for (let x = -radius; x <= radius; x++) {
     const d = (x * x + y * y) / (radius * radius);
     if (d > 1) continue;
-    const z = Math.sqrt(1 - d), light = z * 0.66 - x / radius * 0.65 - y / radius * 0.2;
+    const z = Math.sqrt(1 - d), light = z * 0.59 + x / radius * 0.7 - y / radius * 0.18;
     const terrain = Math.sin(x * 0.36 + y * 0.18) + Math.cos(y * 0.33 - x * 0.07) + Math.sin(x * 0.14 - y * 0.12);
     const cloud = Math.sin(x * 0.30 + y * 0.53 + Math.sin(x * 0.25)) + Math.cos(y * 0.13 - x * 0.35) > 1.38;
-    const color = light < -0.06 ? '#10182d' : light < 0.15 ? '#21344d'
-      : d > 0.91 ? '#76afc8' : cloud ? (light > 0.56 ? '#c2d6d3' : '#6e99a9')
-      : terrain > 0.96 ? (light > 0.56 ? '#71a194' : '#44797e') : light > 0.59 ? '#477eaa' : '#315a8a';
+    const color = light < -0.06 ? '#121b31' : light < 0.15 ? '#263e5a'
+      : d > 0.91 ? '#98cfde' : cloud ? (light > 0.56 ? '#dbdfcf' : '#7da8ba')
+      : terrain > 0.96 ? (light > 0.56 ? '#8db09a' : '#4f7a80') : light > 0.59 ? '#5594b9' : '#375e90';
     dot(g, earthX + x, earthY + y, color);
   }
 
-  oval(g, 52, 100, 29, 18, '#302b3e');
-  oval(g, 52, 100, 20, 13, '#524048');
-  oval(g, 52, 100, 12, 9, '#9e6f58');
-  oval(g, 52, 100, 5, 5, '#fff2d0');
-  line(g, [24, 100], [80, 100], '#79554f');
-  dot(g, 49, 100, '#fff2d0', 7);
+  const sunX = 442, sunY = 94;
+  oval(g, sunX, sunY, 35, 18, '#352838');
+  oval(g, sunX, sunY, 24, 12, '#624339');
+  oval(g, sunX, sunY, 13, 8, '#a97152');
+  line(g, [sunX - 31, sunY], [sunX + 31, sunY], '#8e6049');
+  oval(g, sunX, sunY, 6, 6, '#ffe7b3');
+  oval(g, sunX + 1, sunY - 1, 4, 4, '#fff6d5');
 
   const skyRidge: Point[] = [[0, 124], [18, 117], [38, 113], [56, 117], [85, 103], [108, 109], [124, 105], [144, 110], [184, 93], [200, 96], [222, 105], [249, 100], [281, 112], [315, 108], [343, 92], [359, 90], [385, 104], [408, 106], [435, 98], [470, 110], [512, 104]];
   const ridge: Point[] = [[0, 138], [42, 130], [76, 134], [108, 123], [143, 126], [176, 115], [211, 124], [256, 119], [296, 124], [328, 112], [358, 121], [392, 124], [419, 117], [458, 126], [486, 121], [512, 129]];
   face(g, [...skyRidge, [512, 155], [0, 155]], '#30364d');
   for (const [p, q, r] of [[4, 5, 6], [8, 9, 10], [14, 15, 16], [18, 19, 20]]) {
-    face(g, [skyRidge[p - 1], skyRidge[p], skyRidge[q], skyRidge[r], [skyRidge[q][0], 134]], '#42455b');
-    line(g, skyRidge[p - 1], skyRidge[p], '#575466');
+    face(g, [skyRidge[p], skyRidge[q], skyRidge[r], [skyRidge[q][0] - 4, 134]], '#504956');
+    line(g, skyRidge[p], skyRidge[q], '#7a686b');
   }
+  face(g, [[435, 98], [470, 110], [512, 104], [512, 132], [447, 119]], '#66505b');
   face(g, [...ridge, [512, 304], [0, 304]], '#6a687c');
   face(g, [[0, 152], [87, 146], [146, 152], [216, 131], [329, 148], [412, 137], [512, 155], [512, 304], [0, 304]], '#626279');
   face(g, [[0, 216], [77, 206], [137, 222], [201, 213], [279, 225], [365, 216], [434, 234], [512, 226], [512, 304], [0, 304]], '#585a70');
@@ -140,15 +144,21 @@ function prism(g: CanvasRenderingContext2D, x: number, y: number, a: number, b: 
   face(g, [v(left), v(origin), origin, left], front);
   face(g, [v(origin), v(east), east, origin], right);
   face(g, [v(left), v(back), v(east), v(origin)], top);
-  line(g, v(left), v(origin), '#ffffff35');
-  line(g, v(origin), v(east), '#10182773');
+  line(g, v(left), v(origin), '#171f3373');
+  line(g, v(origin), v(east), '#fff0ca50');
   line(g, origin, east, '#192136');
   return { left, back, east, origin, roof: v };
 }
 
 function shadow(g: CanvasRenderingContext2D, x: number, y: number, a: number, b: number, length: number) {
-  face(g, [[x - b - 4, y - b / 2], [x + a - b, y - (a + b) / 2], [x + a + length, y - a / 2 + 13], [x + length, y + 13], [x, y + 4]], 'rgba(16,20,34,0.44)');
-  face(g, [[x - b, y - b / 2], [x, y - 4], [x + a + 6, y - a / 2], [x + length / 2, y + 7], [x - 2, y + 2]], 'rgba(15,21,33,0.28)');
+  const left: Point = [x - b, y - b / 2];
+  const rear: Point = [x + a - b, y - (a + b) / 2];
+  const near: Point = [x, y];
+  for (const [distance, opacity] of [[1.28, 0.17], [1, 0.28], [0.48, 0.39]] as const) {
+    const dx = length * distance;
+    face(g, [rear, [rear[0] - dx - 4, rear[1] + dx * 0.25], [left[0] - dx - 4, left[1] + dx * 0.24],
+      [near[0] - dx, near[1] + dx * 0.25], [x + a * 0.82, y - a * 0.35]], `rgba(17,23,40,${opacity})`);
+  }
 }
 
 function corridor(g: CanvasRenderingContext2D, points: Point[], color: string) {
@@ -181,37 +191,52 @@ function windowRow(g: CanvasRenderingContext2D, x: number, y: number, count: num
 }
 
 function solarPanel(g: CanvasRenderingContext2D, x: number, y: number, state: OutpostState, fault: boolean) {
-  const uv = (u: number, v: number): Point => [x + u * 7 - v * 4, y - u * 3 - v * 6];
-  line(g, [x + 3, y + 7], [x + 3, y - 6], '#647087', 3);
-  line(g, [x + 24, y - 2], [x + 24, y - 12], '#434e64', 3);
-  face(g, [uv(0, 0), uv(5, 0), [x + 35, y - 12], [x, y + 3]], '#172234');
-  face(g, [uv(0, 0), uv(5, 0), uv(5, 4), uv(0, 4)], '#adb6bd');
-  for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) {
-    const cracked = fault && r + c > 2 && (r + c) % 3 !== 0;
-    const color = cracked ? '#513b4f' : state.dust ? '#8b7680' : state.sunlight > 0.56 ? (r === 2 ? '#547daa' : '#3d5b8a') : '#293c63';
-    face(g, [uv(c + 0.08, r + 0.08), uv(c + 0.91, r + 0.08), uv(c + 0.91, r + 0.91), uv(c + 0.08, r + 0.91)], color);
-    if ((r + c) % 2 === 0) line(g, uv(c + 0.22, r + 0.77), uv(c + 0.7, r + 0.77), cracked ? '#e08171' : '#85abc4');
+  const uv = (u: number, v: number): Point => [x + u * 6 - v * 5, y - u * 3 - v * 5];
+  // Tall supports are under the west edge (v=4). The low rail faces the Sun to the east.
+  for (const [u, v] of [[1, 3.7], [4, 3.7], [1, 0.25], [4, 0.25]]) {
+    const top = uv(u, v);
+    const foot: Point = [top[0], y - u * 3 + 7 - v * 1.7];
+    line(g, top, foot, v > 1 ? '#5d687d' : '#a3a4a4', 3);
+    dot(g, foot[0] - 2, foot[1], '#4b5066', 5, 2);
+    dot(g, foot[0] + 1, foot[1] - 2, '#c6b693');
   }
-  line(g, uv(0, 4), uv(5, 4), '#ded7bc');
-  line(g, uv(0, 0), uv(5, 0), '#253247');
+  const lowA = uv(0, 0), lowB = uv(5, 0), highA = uv(0, 4), highB = uv(5, 4);
+  face(g, [lowA, lowB, [lowB[0], lowB[1] + 3], [lowA[0], lowA[1] + 3]], '#48546b');
+  face(g, [lowA, lowB, highB, highA], '#233149');
+  for (let v = 0; v < 4; v++) for (let u = 0; u < 5; u++) {
+    const cracked = fault && u >= 2 && v < 3 && (u + v) % 3 !== 1;
+    const surfaceColor = cracked ? '#653e51' : state.dust ? '#827181'
+      : state.sunlight > 0.55 ? (v === 0 ? '#5581b1' : '#3d6396') : '#345078';
+    face(g, [uv(u + 0.09, v + 0.06), uv(u + 0.85, v + 0.06), uv(u + 0.85, v + 0.88), uv(u + 0.09, v + 0.88)], surfaceColor);
+    line(g, uv(u + 0.20, v + 0.14), uv(u + 0.63, v + 0.14), cracked ? '#cc817d' : v === 0 ? '#a4c8d5' : '#6888b1');
+  }
+  line(g, highA, highB, '#7a8498');
+  line(g, lowB, highB, '#b5c2c8');
+  line(g, lowA, lowB, state.dust ? '#baa28f' : '#f0d7a5');
+  dot(g, lowB[0] - 3, lowB[1] + 1, '#f8e5bf', 3);
   if (fault) {
-    line(g, uv(2, 4), uv(3.4, 2.2), '#151c2c', 2);
-    line(g, uv(3.4, 2.2), uv(2.7, 1.6), '#151c2c', 2);
-    line(g, uv(2.7, 1.6), uv(3.4, 0), '#151c2c', 2);
+    line(g, uv(2.9, 3.4), uv(3.4, 2.3), '#151c2c', 2);
+    line(g, uv(3.4, 2.3), uv(2.7, 1.4), '#151c2c', 2);
+    line(g, uv(2.7, 1.4), uv(3.4, 0), '#151c2c', 2);
+    dot(g, x + 18, y - 1, '#ff9a87', 2);
   }
-  led(g, x + 6, y + 2, fault ? ink.red : state.dust ? '#b69070' : ink.amber);
+  led(g, x + 6, y + 5, fault ? ink.red : state.dust ? '#b69070' : ink.amber);
 }
 
 function tank(g: CanvasRenderingContext2D, x: number, y: number, h: number, color: string) {
-  oval(g, x + 5, y, 12, 4, '#464b62');
-  dot(g, x - 8, y - h, '#6a8297', 17, h);
-  dot(g, x - 7, y - h, '#c9d1ce', 9, h);
-  dot(g, x - 5, y - h, '#ece5d2', 3, h);
+  oval(g, x - 5, y, 12, 4, '#464b62');
+  dot(g, x - 8, y - h, '#637489', 17, h);
+  dot(g, x - 2, y - h, '#b8c0c0', 10, h);
+  dot(g, x + 3, y - h, '#ece5d2', 3, h);
   oval(g, x, y - h, 8, 4, '#d9dad0');
-  oval(g, x - 2, y - h - 1, 5, 2, '#f0e6ce');
-  oval(g, x, y - h + 10, 8, 2, '#425e70');
-  dot(g, x - 7, y - h + 8, color, 12, 2);
-  dot(g, x - 2, y - h - 6, '#8c9ca7', 4, 3);
+  oval(g, x + 2, y - h - 1, 5, 2, '#f0e6ce');
+  for (const band of [10, h - 5]) {
+    oval(g, x, y - h + band, 8, 2, '#425e70');
+    dot(g, x - 4, y - h + band - 1, band === 10 ? color : '#7b969f', 11, 2);
+  }
+  dot(g, x - 2, y - h - 6, '#566a77', 5, 4);
+  dot(g, x + 1, y - h - 7, '#c7b78f', 3, 3);
+  dot(g, x + 6, y - h + 15, '#faf0d8', 2, 3);
 }
 
 function drawOxygen(g: CanvasRenderingContext2D, x: number, y: number, state: OutpostState) {
@@ -224,6 +249,8 @@ function drawOxygen(g: CanvasRenderingContext2D, x: number, y: number, state: Ou
   line(g, [x - 9, y - 6], [x - 8, y], '#92a1ac', 3);
   line(g, [x - 8, y], [x + 6, y - 1], '#99a9bb', 3);
   prism(g, x + 1, y + 4, 12, 14, 10, steel);
+  dot(g, x - 7, y - 8, '#283a50', 7, 4);
+  dot(g, x - 6, y - 7, color, 4);
   led(g, x - 5, y - 3, color);
 }
 
@@ -231,15 +258,20 @@ function habitat(g: CanvasRenderingContext2D, x: number, y: number, state: Outpo
   const living = state.habitatOffline ? '#70434c' : '#eed38d';
   prism(g, x, y + 3, 45, 43, 3, graphite);
   prism(g, x, y, 40, 39, 20, steel);
-  prism(g, x - 3, y - 18, 36, 33, 4, ['#efeadb', '#c0c3c1', '#77879b']);
-  prism(g, x + 7, y - 27, 17, 17, 5, ['#c2cbcb', '#8e9da9', '#597084']);
-  line(g, [x - 26, y - 27], [x + 8, y - 44], '#a9b0ba');
-  line(g, [x - 16, y - 22], [x + 13, y - 36], '#a9b0ba');
+  prism(g, x - 3, y - 18, 36, 33, 4, ['#efeadb', '#8896aa', '#c0bab9']);
+  prism(g, x + 7, y - 27, 17, 17, 5, ['#c2cbcb', '#71879b', '#a0acb0']);
+  for (let i = 0; i < 3; i++) {
+    const sx = x - 25 + i * 8, sy = y - 30 + i * 4;
+    line(g, [sx, sy], [sx + 20, sy - 10], '#a6a6ad');
+    line(g, [sx + 1, sy - 1], [sx + 17, sy - 9], '#f6ecd9');
+  }
   windowRow(g, x - 32, y - 29, 3, living);
   windowRow(g, x + 10, y - 14, 3, living, -1);
   prism(g, x + 3, y + 8, 13, 13, 11, graphite);
-  face(g, [[x - 7, y + 1], [x + 1, y + 5], [x + 1, y - 4], [x - 7, y - 8]], '#222e41');
+  face(g, [[x - 7, y + 1], [x + 1, y + 5], [x + 1, y - 4], [x - 7, y - 8]], '#232b41');
+  line(g, [x - 7, y - 7], [x + 1, y - 3], '#8897a6');
   line(g, [x - 6, y - 4], [x, y - 1], living, 2);
+  dot(g, x - 3, y + 1, '#a49886', 2, 2);
   prism(g, x - 3, y + 11, 10, 12, 2, basalt);
   led(g, x + 5, y - 3, state.habitatOffline ? ink.red : ink.mint);
 }
@@ -252,9 +284,11 @@ function greenhouse(g: CanvasRenderingContext2D, x: number, y: number, state: Ou
   face(g, [[x - 16, y - 42], [x + 13, y - 57], [x + 24, y - 51], [x - 5, y - 36]], on ? '#6ca799' : '#628293');
   for (let i = 0; i < 6; i++) {
     const a = x - 33 + i * 6, b = y - 22 + i * 3;
-    dot(g, a - 2, b - 4, on ? '#93db82' : '#3b5d62', 3, 4);
-    dot(g, a + 1, b - 6, on ? '#6baa63' : '#3d6466', 2, 4);
-    dot(g, a - 1, b, '#203e4a', 4, 2);
+    const stalk = i % 3 === 0 ? 9 : 6;
+    dot(g, a, b - stalk, on ? '#a2d985' : '#50666a', 1, stalk);
+    dot(g, a - 2, b - stalk + 2, on ? '#79c87c' : '#476168', 2, 2);
+    dot(g, a + 1, b - stalk + 4, on ? '#5c9760' : '#394e5a', 2, 2);
+    dot(g, a - 2, b, '#203e4a', 5, 2);
     dot(g, x + i * 4, y - 9 - i * 2, on ? '#a6ca6b' : '#2e4956', 2, 3);
   }
   for (let i = 0; i < 4; i++) {
@@ -263,14 +297,16 @@ function greenhouse(g: CanvasRenderingContext2D, x: number, y: number, state: Ou
     for (let j = 1; j < p.length; j++) line(g, p[j - 1], p[j], on ? '#afc4b3' : '#849eaa');
   }
   line(g, [x - 38, y - 21], [x, y - 2], '#a4afb3', 2);
-  line(g, [x + 2, y - 3], [x + 29, y - 17], '#76899b', 2);
+  line(g, [x + 2, y - 3], [x + 29, y - 17], '#a1bab9', 2);
+  line(g, [x + 6, y - 39], [x + 26, y - 49], on ? '#b8d2bb' : '#9bb1bd');
+  dot(g, x + 21, y - 35, on ? '#8abb9b' : '#668796', 3);
   led(g, x + 4, y - 6, state.pumpFault ? ink.red : on ? ink.mint : '#566579');
 }
 
 function lab(g: CanvasRenderingContext2D, x: number, y: number, on: boolean) {
   prism(g, x, y + 3, 30, 32, 4, graphite);
   prism(g, x, y, 27, 29, 15, steel);
-  prism(g, x - 2, y - 14, 24, 24, 4, ['#afa7bd', '#747b9b', '#495674']);
+  prism(g, x - 2, y - 14, 24, 24, 4, ['#b5acc1', '#5c6685', '#85869b']);
   windowRow(g, x - 23, y - 21, 2, on ? ink.ice : '#596e8e');
   line(g, [x + 1, y - 26], [x + 4, y - 47], '#aebaca', 2);
   face(g, [[x - 8, y - 48], [x + 2, y - 40], [x + 14, y - 45], [x + 16, y - 54], [x + 4, y - 49]], '#a1acb9');
@@ -281,8 +317,8 @@ function lab(g: CanvasRenderingContext2D, x: number, y: number, on: boolean) {
 }
 
 function shelter(g: CanvasRenderingContext2D, x: number, y: number, state: OutpostState) {
-  prism(g, x, y + 2, 29, 34, 14, ['#9e8c81', '#7d7075', '#514d62']);
-  prism(g, x, y - 12, 24, 29, 6, ['#bcb1a0', '#8c7980', '#626073']);
+  prism(g, x, y + 2, 29, 34, 14, ['#a19187', '#514e64', '#8e797b']);
+  prism(g, x, y - 12, 24, 29, 6, ['#c1b3a1', '#645967', '#a28a8a']);
   for (let i = 0; i < 4; i++) {
     const px = x - 25 + i * 5, py = y - 15 + i * 2.5;
     line(g, [px, py], [px, py + 8], '#625966', 2);
@@ -291,6 +327,7 @@ function shelter(g: CanvasRenderingContext2D, x: number, y: number, state: Outpo
   face(g, [[x + 5, y - 4], [x + 20, y - 11], [x + 20, y - 23], [x + 5, y - 16]], '#333547');
   face(g, [[x + 7, y - 5], [x + 18, y - 11], [x + 18, y - 20], [x + 7, y - 15]], door);
   if (state.facilities.shelter) line(g, [x + 12, y - 8], [x + 12, y - 17], '#494454');
+  for (let i = 0; i < 3; i++) dot(g, x + 19 + i * 2, y - 10 - i, '#cfaa73');
   led(g, x + 10, y - 24, state.radiation ? ink.red : state.facilities.shelter ? ink.amber : '#596879');
 }
 
@@ -345,11 +382,15 @@ export function drawOutpost(g: CanvasRenderingContext2D, state: OutpostState) {
   if (state.dust) dot(g, 0, 118, '#b5906826', 512, 186);
 
   // Graded gravel working area and long shadows, separate from the actual obstacles and data.
-  face(g, [[62, 183], [136, 135], [296, 118], [401, 151], [401, 214], [314, 263], [201, 275], [105, 228]], '#88818d48');
+  face(g, [[62, 183], [136, 135], [306, 118], [441, 151], [441, 207], [314, 263], [201, 275], [105, 228]], '#88818d48');
   for (const [id, a, b, h] of [
-    ['solar', 42, 44, 54], ['oxygen', 31, 35, 38], ['lab', 31, 30, 35], ['greenhouse', 33, 40, 53],
-    ['habitat', 44, 42, 49], ['shelter', 33, 35, 37], ['battery', 31, 29, 26], ['dock', 53, 43, 13],
+    ['oxygen', 31, 35, 58], ['lab', 31, 30, 55], ['greenhouse', 33, 40, 72],
+    ['habitat', 44, 42, 75], ['shelter', 33, 35, 57], ['battery', 31, 29, 34], ['dock', 53, 43, 15],
   ] as const) shadow(g, ...anchors[id], a, b, h);
+  for (const [x, y] of solarPositions) shadow(g, x + 2, y + 7, 30, 20, 49);
+  if (state.upgrades.solar) {
+    for (const [x, y] of solarExtension) shadow(g, x + 2, y + 7, 30, 20, 49);
+  }
   for (const { id, points } of pipes) {
     corridor(g, points, live(id, state) ? (id === 'solar' || id === 'battery' ? '#c49d6a' : '#70a4aa') : '#515b6e');
   }
@@ -360,14 +401,11 @@ export function drawOutpost(g: CanvasRenderingContext2D, state: OutpostState) {
     }
   }
   if (state.upgrades.solar) {
-    solarPanel(g, 118, 148, state, false);
-    solarPanel(g, 145, 160, state, false);
+    for (const [x, y] of solarExtension) solarPanel(g, x, y, state, false);
   }
   lab(g, ...anchors.lab, state.facilities.lab);
   drawOxygen(g, ...anchors.oxygen, state);
-  solarPanel(g, 110, 169, state, false);
-  solarPanel(g, 128, 181, state, false);
-  solarPanel(g, 146, 192, state, !!state.solarFault);
+  solarPositions.forEach(([x, y], i) => solarPanel(g, x, y, state, !!state.solarFault && i === solarPositions.length - 1));
   greenhouse(g, ...anchors.greenhouse, state);
   habitat(g, ...anchors.habitat, state);
   battery(g, ...anchors.battery, state);
@@ -401,8 +439,9 @@ export function drawOutpostLights(g: CanvasRenderingContext2D, state: OutpostSta
     }
   }
   if (state.solarFault && phase % 7 < 3) {
-    dot(g, 151, 193, '#ffd6b9', 2, 2);
-    dot(g, 153, 191, '#ff8281');
+    const [x, y] = solarPositions[solarPositions.length - 1];
+    dot(g, x + 18, y - 5, '#ffd6b9', 2, 2);
+    dot(g, x + 20, y - 7, '#ff8281');
   }
   if (state.radiation) {
     const flash = phase % 12 < 5;

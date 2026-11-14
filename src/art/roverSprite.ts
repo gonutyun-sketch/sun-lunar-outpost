@@ -3,7 +3,7 @@ import { dot, face, ink, line, oval, surface, type Point } from './pixels';
 type Vec = readonly [number, number, number];
 type Palette = readonly [string, string, string];
 type Project = (v: Vec) => Point;
-type Panel = { vertices: Vec[]; color: string; detail?: (g: CanvasRenderingContext2D, project: Project) => void };
+type Panel = { vertices: Vec[]; color: string; darkColor?: string; detail?: (g: CanvasRenderingContext2D, project: Project) => void };
 
 const steel: Palette = ['#e3ded2', '#a5afbc', '#5d6b80'];
 const plate: Palette = ['#b6bec2', '#718297', '#3c4d62'];
@@ -19,10 +19,10 @@ function box(panels: Panel[], from: Vec, to: Vec, palette: Palette, detail?: Pan
   const A: Vec = [x, y, z], B: Vec = [xx, y, z], C: Vec = [xx, yy, z], D: Vec = [x, yy, z];
   panels.push(
     { vertices: [a, b, c, d], color: palette[0], detail },
-    { vertices: [d, c, C, D], color: palette[1] },
-    { vertices: [c, b, B, C], color: palette[2] },
-    { vertices: [b, a, A, B], color: palette[2] },
-    { vertices: [a, d, D, A], color: palette[1] },
+    { vertices: [d, c, C, D], color: palette[1], darkColor: palette[2] },
+    { vertices: [c, b, B, C], color: palette[1], darkColor: palette[2] },
+    { vertices: [b, a, A, B], color: palette[1], darkColor: palette[2] },
+    { vertices: [a, d, D, A], color: palette[1], darkColor: palette[2] },
   );
 }
 
@@ -44,7 +44,8 @@ function sprite(heading: number, tread: number, lean: number, cargo: boolean) {
     }).filter((p) => p.area > 0.01);
     visible.sort((a, b) => a.depth - b.depth);
     for (const { p, a } of visible) {
-      face(g, a, p.color);
+      const lit = a[0][1] - a[1][1] + (a[0][0] - a[1][0]) * 0.18 > 0;
+      face(g, a, lit ? p.color : p.darkColor ?? p.color);
       p.detail?.(g, project);
     }
   };
@@ -58,15 +59,20 @@ function sprite(heading: number, tread: number, lean: number, cargo: boolean) {
     }
     const hub = (side: number) => (_g: CanvasRenderingContext2D, p: Project) => {
       const [a, b] = p([x, side, 3.7]);
-      dot(g, a - 1, b - 1, '#69788b', 2, 2);
-      dot(g, a, b - 1, '#b3b7b7');
+      dot(g, a - 1, b - 1, '#6d8092', 3, 3);
+      dot(g, a, b - 1, '#c2c3bb');
+      dot(g, a + 1, b + 1, '#313c50');
     };
     panels.push({ vertices: high, color: '#283344', detail: hub(y + 1.8) });
     panels.push({ vertices: low.slice().reverse(), color: '#242d3c', detail: hub(y - 1.8) });
     for (let i = 0; i < 8; i++) {
       const j = (i + 1) % 8;
-      const tone = i < 4 ? '#222a3b' : (i + tread) % 2 ? '#495363' : '#313d50';
-      panels.push({ vertices: [low[i], low[j], high[j], high[i]], color: tone });
+      const tone = i < 4 ? '#222a3b' : (i + tread) % 2 ? '#536071' : '#334152';
+      panels.push({ vertices: [low[i], low[j], high[j], high[i]], color: tone, detail: (ctx, project) => {
+        if (i > 2 || (i + tread) % 2 === 0) return;
+        const midpoint = (a: Vec, b: Vec): Vec => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+        line(ctx, project(midpoint(low[i], low[j])), project(midpoint(high[i], high[j])), '#77838b');
+      } });
     }
     drawPanels(panels);
   };
@@ -95,10 +101,19 @@ function sprite(heading: number, tread: number, lean: number, cargo: boolean) {
   box(equipment, [3, -3, 15 + lean], [9, 2, 18 + lean], steel);
   box(equipment, [8, -2, 15 + lean], [10, 1, 17 + lean], dark);
   drawPanels(equipment);
-  const [lensX, lensY] = project([9.5, 0, 16 + lean]);
-  dot(g, lensX, lensY, ink.ice);
-  const [ledX, ledY] = project([11, 4, 7]);
-  dot(g, ledX, ledY, '#fff1be', 2);
+  if (s >= -0.38) {
+    const [lensX, lensY] = project([9.6, 0, 16 + lean]);
+    dot(g, lensX - 1, lensY - 1, '#17283a', 3, 3);
+    dot(g, lensX, lensY, ink.ice);
+  }
+  for (const side of [-1, 1]) {
+    const [ledX, ledY] = project([11, side * 4, 7]);
+    dot(g, ledX, ledY, '#fff1be', 2);
+    if (s < 0.33) {
+      const [rx, ry] = project([-11, side * 4, 6 + lean]);
+      dot(g, rx, ry, '#eb857a', 2);
+    }
+  }
   const [antennaX, antennaY] = project([-8, 4, 9 + lean]);
   line(g, [antennaX, antennaY], [antennaX - 2, antennaY - 7], '#a3aebe');
   dot(g, antennaX - 2, antennaY - 8, ink.ice);
@@ -125,6 +140,6 @@ export function roverSprite(g: CanvasRenderingContext2D, x: number, y: number, p
 }
 
 export function roverShadow(g: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
-  oval(g, x + 5 * scale, y + 3 * scale, 15 * scale, 8 * scale, 'rgba(15,18,29,0.48)');
+  oval(g, x - 8 * scale, y + 4 * scale, 17 * scale, 8 * scale, 'rgba(15,18,29,0.48)');
   oval(g, x, y + 1 * scale, 11 * scale, 5 * scale, 'rgba(12,15,25,0.58)');
 }

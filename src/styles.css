@@ -16,6 +16,11 @@
   --display: 'Orbitron', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif;
   --body: 'Inter', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', system-ui, sans-serif;
   --radius: 4px;
+  --pixel-corners: polygon(0 5px, 2px 5px, 2px 2px, 5px 2px, 5px 0,
+    calc(100% - 5px) 0, calc(100% - 5px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 5px, 100% 5px,
+    100% calc(100% - 5px), calc(100% - 2px) calc(100% - 5px), calc(100% - 2px) calc(100% - 2px),
+    calc(100% - 5px) calc(100% - 2px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 2px),
+    2px calc(100% - 2px), 2px calc(100% - 5px), 0 calc(100% - 5px));
 }
 
 * { box-sizing: border-box; }
@@ -822,7 +827,7 @@ html.touch button, html.touch .gauge, html.touch .cz-tile { touch-action: manipu
 .menu-art .outpost-view { height: 100%; }
 .menu-art::after {
   position: absolute; inset: 0; content: "";
-  background: linear-gradient(90deg, #080c16 0%, #080c16c7 21%, #080c1620 47%, #080c1600 66%),
+  background: linear-gradient(90deg, #080c16 0%, #080c16bb 12%, #080c165c 24%, #080c1619 45%, transparent 62%),
     linear-gradient(0deg, #080c16 0%, #080c1640 17%, transparent 38%);
 }
 .menu-content { width: min(100%, 420px); display: grid; justify-items: start; gap: 16px; }
@@ -852,6 +857,83 @@ html.touch button, html.touch .gauge, html.touch .cz-tile { touch-action: manipu
   mask-image: linear-gradient(90deg, transparent 40%, #000);
 }
 .grade-ring .letter { text-shadow: 2px 2px #24354a; }
+.mission-warning-region {
+  position: fixed; z-index: 35; top: max(12px, env(safe-area-inset-top));
+  left: 50%; transform: translateX(-50%); width: min(460px, calc(100% - 24px));
+  pointer-events: none;
+}
+.mission-warning {
+  --notice: #f4ca65;
+  position: relative; isolation: isolate; display: flex; gap: 13px; align-items: center;
+  padding: 12px 19px 13px; clip-path: var(--pixel-corners);
+  color: var(--notice); background: var(--notice);
+  animation: warning-in 170ms steps(4, end) both;
+}
+.mission-warning.critical { --notice: #ff7f88; }
+.mission-warning::before {
+  position: absolute; z-index: -1; content: ""; inset: 3px;
+  clip-path: var(--pixel-corners); background: #211927fa;
+}
+.mission-warning svg { flex: 0 0 24px; }
+.mission-warning strong, .mission-warning span { display: block; }
+.mission-warning strong { font: 800 clamp(15px, 2.4vw, 21px)/1.25 var(--body); }
+.mission-warning span { margin-top: 3px; color: #f2e3e6; font-size: 12px; line-height: 1.35; }
+@keyframes warning-in { from { opacity: 0; translate: 0 -8px; } to { opacity: 1; translate: 0 0; } }
+
+/* Stepped frames are visual only. Buttons keep their rectangular keyboard and touch targets. */
+:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn {
+  --button-frame: #5e718b;
+  --button-face: #202d45;
+  position: relative; isolation: isolate; border-color: transparent; background: transparent; box-shadow: none;
+}
+:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn::before,
+:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn::after {
+  content: ""; position: absolute; z-index: -1; clip-path: var(--pixel-corners); pointer-events: none;
+}
+:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn::before { inset: 0; background: var(--button-frame); }
+:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn::after {
+  inset: 1px 1px 3px; background: var(--button-face); box-shadow: inset 0 2px #ffffff19;
+}
+:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn:hover:not(:disabled) {
+  --button-frame: #a6bacf; --button-face: #2b3f59; background: transparent; border-color: transparent;
+}
+:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn-primary {
+  --button-frame: #aee0e8; --button-face: #81cada; color: #101a2b;
+}
+:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn-primary:hover:not(:disabled) {
+  --button-frame: #d2f0f3; --button-face: #a9dfeb;
+}
+:is(.menu-buttons, .advance) .btn-primary {
+  --button-frame: #ffe3a1; --button-face: #edc575;
+}
+:is(.menu-buttons, .advance) .btn-primary:hover:not(:disabled) {
+  --button-frame: #fff1c5; --button-face: #ffdd96;
+}
+.advance .btn-rover { --button-face: #223b51; --button-frame: #7ba5ae; color: #dcf4f3; }
+:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn-primary:disabled {
+  --button-frame: #58647a; --button-face: #2b354d; color: #b3bdd0; background: transparent;
+}
+:is(.topbar, .ex-top, .results-hero) { box-shadow: inset 0 2px #66768f3f; }
+.topbar .brand { border-right-color: #46536a; }
+.controls h2 {
+  color: #b0c2d4; padding: 5px 7px 5px 9px; background: #1e2b40;
+  border-left: 3px solid #7bb4c4; border-bottom: 1px solid #3f4d65;
+}
+.fac {
+  background-image: linear-gradient(#41506a, #41506a), linear-gradient(#41506a, #41506a);
+  background-size: 9px 1px, 1px 9px; background-position: right 3px bottom 3px; background-repeat: no-repeat;
+}
+.stat .bar::after, .power-meter::after, .ex-battery .bar::after {
+  background: repeating-linear-gradient(90deg, transparent 0 9px, #0a101d9e 9px 11px);
+}
+.ex-distance { box-shadow: 2px 2px #0b1221; }
+.ex-zone.deep { color: #b6dafa; }
+.ex-battery.low .ex-zone { font-weight: 700; }
+.ex-card.puzzle { box-shadow: 5px 5px #080c16b0, inset 0 3px #8f7b552c; }
+.pressure .g-band { fill: #4ba88b77; }
+.pressure .g-needle { stroke: #fff1bf; }
+.pressure .gauge.ok .g-needle { stroke: #c0f7dd; }
+.results .grade-ring { border: 1px solid #56637a; background: #111b2b; clip-path: var(--pixel-corners); }
 
 .explore { grid-template-rows: auto minmax(0, 1fr) auto; }
 .ex-top { background: #151f30; }
@@ -921,6 +1003,8 @@ html.touch .ex-controls .action-btn { touch-action: none; }
   .menu-lang { right: max(14px, env(safe-area-inset-right)); top: max(4px, env(safe-area-inset-top)); }
 }
 @media (max-width: 640px) {
+  .mission-warning { padding: 10px 13px; gap: 9px; }
+  .mission-warning span { font-size: 11px; }
   .scene-overlay { gap: 5px; }
   .scene-overlay .chip { flex: 1 1 120px; }
   .topbar .brand { min-width: 0; }
@@ -950,10 +1034,20 @@ html.touch .ex-controls .action-btn { touch-action: none; }
   .pressure .gauge svg { height: 122px; }
 }
 @media (max-width: 360px) {
-  .pressure .g-btns { flex-direction: column; }
-  .pressure .gauge svg { height: 86px; }
+  .ex-battery .ex-bat-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 4px; line-height: 1.25; }
+  .ex-battery .ex-bat-head > span:first-child { grid-column: 1 / -1; font-size: 9px; letter-spacing: 0.05em; }
+  .ex-battery b { font-size: 17px; }
+  .ex-battery .ex-rate { justify-self: end; margin-left: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ex-battery .ex-zone { font-size: 10px; line-height: 1.3; }
+  .ex-card.pressure { animation-name: pressure-fade; }
+  .pressure .gauges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+  .pressure .gauge { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 2px; }
+  .pressure .g-label, .pressure .g-val { grid-column: 1 / -1; }
+  .pressure .gauge svg { grid-column: 1; grid-row: 2; width: 100%; height: 100px; }
+  .pressure .g-btns { grid-column: 2; grid-row: 2; flex-direction: column; }
   .pressure-wrap { gap: 5px; }
 }
+@keyframes pressure-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (max-height: 500px) and (orientation: landscape) {
   .menu { padding-top: 44px; padding-bottom: 22px; }
   .menu-content { gap: 9px; width: min(100%, 335px); }

@@ -81,11 +81,11 @@ export function oval(g: CanvasRenderingContext2D, x: number, y: number, rx: numb
   }
 }
 
-/** Grazing light exposes the inner far wall and leaves the near wall in shadow. */
+/** Sunlight from the right strikes the outer right rim and the opposite inner wall. */
 export function crater(g: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, seed: number) {
   const rng = random(seed);
-  const colors = ['#2b2d3c', '#373b4e', '#41465c', '#4d5268', '#62667a', '#858392', '#a29aa0'];
-  const minX = Math.floor(x - rx * 1.18), maxX = Math.ceil(x + rx * 1.28);
+  const colors = ['#24263a', '#303449', '#41485d', '#555a6e', '#706e7c', '#938d96', '#b3a7a4'];
+  const minX = Math.floor(x - rx * 1.25), maxX = Math.ceil(x + rx * 1.22);
   const minY = Math.floor(y - ry * 1.19), maxY = Math.ceil(y + ry * 1.28);
   for (let py = minY; py <= maxY; py++) {
     for (let px = minX; px <= maxX; px++) {
@@ -93,16 +93,17 @@ export function crater(g: CanvasRenderingContext2D, x: number, y: number, rx: nu
       const d = Math.hypot(dx, dy);
       const variation = (rng() - 0.5) * 0.065 + Math.sin(dx * 18 + dy * 9) * 0.02;
       const radius = d + variation;
-      const lit = (dx + dy * 0.26) / (d || 1);
+      const lit = (dx - dy * 0.26) / (d || 1);
       if (radius <= 0.73) {
-        if (rng() > 0.06) dot(g, px, py, colors[lit > 0.1 && radius > 0.56 ? 1 : 0]);
+        const basin = lit < -0.18 && radius > 0.43 ? 1 : 0;
+        dot(g, px, py, colors[basin + (rng() > 0.978 ? 1 : 0)]);
       } else if (radius <= 1) {
-        const ridge = radius > 0.91 ? 0 : 1;
-        dot(g, px, py, colors[lit > 0.32 ? 5 - ridge : lit < -0.35 ? ridge : 3]);
+        const shelf = radius > 0.91 ? 2 : radius > 0.82 ? 1 : 0;
+        dot(g, px, py, colors[lit < -0.3 ? 3 + shelf : lit > 0.24 ? shelf : 2 + (shelf === 2 ? 1 : 0)]);
       } else if (radius < 1.11) {
-        if (rng() > (radius - 1) * 5) dot(g, px, py, colors[lit < -0.25 ? 6 : lit > 0.45 ? 1 : 4]);
+        if (rng() > (radius - 1) * 6) dot(g, px, py, colors[lit > 0.28 ? (radius < 1.055 ? 6 : 5) : lit < -0.4 ? 2 : 4]);
       } else if (radius < 1.22 && rng() > 0.94) {
-        dot(g, px, py, colors[lit < 0 ? 5 : 2]);
+        dot(g, px, py, colors[lit > 0 ? 5 : 2]);
       }
     }
   }
@@ -115,18 +116,21 @@ export function boulder(g: CanvasRenderingContext2D, x: number, y: number, r: nu
     const size = r * (0.88 + rng() * 0.12);
     return [x + Math.cos(angle) * size, y + Math.sin(angle) * size];
   });
-  oval(g, x + r * 0.65, y + r * 0.43, r * 1.43, r * 0.58, 'rgba(15,17,29,0.48)');
+  oval(g, x - r * 1.2, y + r * 0.43, r * 1.78, r * 0.57, '#171c321f');
+  oval(g, x - r * 0.72, y + r * 0.40, r * 1.36, r * 0.56, '#14192957');
+  oval(g, x - r * 0.26, y + r * 0.33, r * 0.98, r * 0.48, '#1317284d');
   face(g, edge, '#393b4c');
   const crown: Point[] = [[x - r * 0.28, y - r * 0.7], [x + r * 0.46, y - r * 0.4], [x + r * 0.23, y + r * 0.18], [x - r * 0.53, y + r * 0.25]];
-  face(g, [edge[3], edge[4], edge[5], crown[0], crown[3]], '#827d85');
-  face(g, [edge[5], edge[6], edge[7], crown[1], crown[0]], '#9d9598');
-  face(g, [edge[0], edge[1], edge[2], crown[2], crown[1], edge[7]], '#52576d');
+  face(g, [edge[3], edge[4], edge[5], crown[0], crown[3]], '#55586f');
+  face(g, [edge[5], edge[6], edge[7], crown[1], crown[0]], '#968f98');
+  face(g, [edge[0], edge[1], edge[2], crown[2], crown[1], edge[7]], '#817e8b');
   face(g, crown, '#b2aaa8');
-  line(g, crown[0], crown[1], '#c5b8b1');
+  line(g, crown[1], crown[2], '#decdc0');
   line(g, [x - r * 0.54, y + r * 0.23], [x - r * 0.1, y + r * 0.61], '#696a7d');
   if (r > 6) {
     dot(g, x - r * 0.25, y - r * 0.3, '#96909a', 2);
     dot(g, x - r * 0.04, y - r * 0.27, '#d6c3b3');
-    dot(g, x + r * 0.35, y + r * 0.37, '#6b697a');
+    dot(g, x + r * 0.35, y + r * 0.37, '#a19aa0');
+    line(g, [x - r * 0.46, y - r * 0.07], [x - r * 0.16, y + r * 0.12], '#98929d');
   }
 }

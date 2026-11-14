@@ -1,4 +1,4 @@
-import type { Rect, WorldMap } from '../rover/world';
+import { shadowLevel, type Rect, type WorldMap } from '../rover/world';
 import { boulder, crater, dot, face, ink, line, oval, random, surface, type Point } from './pixels';
 
 export const WORLD_PIXEL = 2;
@@ -46,37 +46,51 @@ function ground(g: CanvasRenderingContext2D, m: WorldMap) {
 }
 
 function shadows(g: CanvasRenderingContext2D, m: WorldMap) {
-  for (const zone of m.shadows) {
-    const x = p(zone.x), y = p(zone.y), r = p(zone.r);
-    const rng = random(zone.x + zone.y);
-    oval(g, x, y, r + 1, r + 1, zone.deep ? '#202e4ab5' : '#222a496d');
-    oval(g, x - r * 0.08, y + r * 0.045, r * 0.88, r * 0.86, zone.deep ? '#10182d87' : '#1a213c48');
-    for (let i = 0; i < Math.ceil(r * 1.9); i++) {
-      const a = i * 2.399, d = r * (0.90 + rng() * 0.14);
-      dot(g, x + Math.cos(a) * d, y + Math.sin(a) * d, zone.deep ? '#9bbad36a' : '#acb3cd46', i % 3 ? 1 : 2);
+  const { width, height } = g.canvas;
+  const mask = new Uint8Array(width * height);
+  const fill = ['', '#20284078', '#121f3dbb'];
+  const rim = ['', '#b0c4dae0', '#96cbf7f0'];
+  // Sample the same predicate as the rover at each native pixel centre. An overlap has one
+  // tint and a border only where the drain level actually changes.
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    let run = 0, last = 0;
+    for (let x = 0; x <= width; x++) {
+      const level = x === width ? 0 : shadowLevel(m, (x + 0.5) * WORLD_PIXEL, (y + 0.5) * WORLD_PIXEL);
+      if (x < width) mask[row + x] = level;
+      if (level === last) continue;
+      if (last > 0) dot(g, run, y, fill[last], x - run);
+      run = x;
+      last = level;
     }
-    if (zone.deep) {
-      for (let i = 0; i < 125; i++) {
-        const a = rng() * Math.PI * 2, d = r * Math.sqrt(rng()) * 0.92;
-        dot(g, x + Math.cos(a) * d, y + Math.sin(a) * d, '#aac5de60');
-      }
+  }
+  for (let y = 1; y < height - 1; y++) for (let x = 1; x < width - 1; x++) {
+    const i = y * width + x, level = mask[i];
+    if (!level) continue;
+    const edge = mask[i - 1] < level || mask[i + 1] < level || mask[i - width] < level || mask[i + width] < level;
+    if (edge && ((x + 2 * y) % 17 < (level === 2 ? 13 : 9))) {
+      dot(g, x, y, rim[level]);
+    } else if (level === 2 && (x * 29 + y * 71 + x * y) % 1109 === 0) {
+      dot(g, x, y, '#9dcae990');
     }
   }
 }
 
 function block(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, lift: number, colors: readonly [string, string, string]) {
   const roof = y - lift, offset = Math.ceil(lift * 0.36);
-  face(g, [[x + 2, y + h - 4], [x + w, y + 1], [x + w + lift * 2, y + h - 1], [x + w + lift * 1.4, y + h + 7], [x + 3, y + h + 3]], '#20223580');
+  face(g, [[x, y + 3], [x + w, y + h - 4], [x + 1, y + h + 8], [x - lift * 3.2, y + h + 10], [x - lift * 3.2, y + lift * 0.74]], '#22283e48');
+  face(g, [[x, y], [x + w, y + h - 5], [x, y + h + 5], [x - lift * 1.65, y + h + 5], [x - lift * 1.65, y + 4]], '#171e32a0');
   face(g, [[x, roof + 4], [x + 4, roof], [x + w - 4 - offset, roof], [x + w - offset, roof + 4], [x + w - offset, y + h - lift - 4], [x + w - offset - 4, y + h - lift], [x + 4, y + h - lift], [x, y + h - lift - 4]], colors[0]);
   face(g, [[x + w - offset, roof + 4], [x + w, y + 4], [x + w, y + h - 5], [x + w - 4, y + h], [x + w - offset - 4, y + h - lift], [x + w - offset, y + h - lift - 4]], colors[2]);
   face(g, [[x, y + h - lift - 4], [x + 4, y + h - lift], [x + w - offset - 4, y + h - lift], [x + w - 4, y + h], [x + 4, y + h], [x, y + h - 4]], colors[1]);
-  line(g, [x + 4, roof], [x + w - 4 - offset, roof], '#ded7c4');
+  line(g, [x + 4, roof], [x + w - 4 - offset, roof], '#e0d5bc');
+  line(g, [x + w - 1, y + 6], [x + w - 1, y + h - 5], '#d1c4ae79');
   line(g, [x + 4, y + h - lift], [x + w - offset - 4, y + h - lift], '#283045');
 }
 
 function habitat(g: CanvasRenderingContext2D, r: Rect) {
   const x = p(r.x), y = p(r.y), w = p(r.w), h = p(r.h);
-  const tint = ['#dad7cd', '#9aa2b2', '#5b6c81'] as const;
+  const tint = ['#dad7cd', '#8b97aa', '#adaeb3'] as const;
   block(g, x, y, w, h, 12, ['#8895a2', '#68758a', '#46526b']);
   block(g, x + 4, y + 2, w - 8, h * 0.56, 12, tint);
   block(g, x + 8, y + h * 0.43, w - 26, h * 0.54, 12, tint);
@@ -86,6 +100,10 @@ function habitat(g: CanvasRenderingContext2D, r: Rect) {
       dot(g, px, level + 1, '#38475c', 7, 4);
       dot(g, px + 1, level + 2, '#f1ca80', 5, 2);
     }
+  }
+  for (let i = 0; i < 3; i++) {
+    dot(g, x + 10, y + 17 + i * 3, '#909baa', 12);
+    dot(g, x + w - 24, y + 12 + i * 3, '#eee1ca', 5);
   }
   line(g, [x + 12, y + 6], [x + 24, y + 6], '#8f9baa', 2);
   line(g, [x + 28, y + 9], [x + 28, y - 9], '#576a7c', 2);
@@ -112,16 +130,16 @@ function solar(g: CanvasRenderingContext2D, r: Rect, broken: boolean) {
   for (let i = 0; i < n; i++) {
     const px = x + i * 15;
     const bad = broken && i >= n - 3;
-    face(g, [[px + 2, y + 3], [px + 17, y + 10], [px + 27, y + 19], [px + 6, y + 15]], '#22283b86');
-    dot(g, px + 4, y + 3, '#858da5', 2, h - 3);
-    const tl: Point = [px, y - 5], tr: Point = [px + 11, y - 5], br: Point = [px + 15, y + h - 4], bl: Point = [px + 4, y + h - 4];
+    face(g, [[px + 6, y + 1], [px + 15, y + 11], [px - 3, y + 19], [px - 14, y + 12]], '#20263986');
+    line(g, [px + 1, y - 3], [px + 1, y + h - 1], '#68778b', 2);
+    line(g, [px + 11, y + 2], [px + 11, y + h], '#a3a4a0', 2);
+    const tl: Point = [px, y - 6], tr: Point = [px + 11, y - 2], br: Point = [px + 15, y + h - 3], bl: Point = [px + 3, y + h - 7];
     face(g, [bl, br, [br[0], br[1] + 3], [bl[0], bl[1] + 3]], '#34415b');
     face(g, [tl, tr, br, bl], bad ? '#674754' : '#365e8c');
-    line(g, tl, tr, '#b8bbb6');
-    line(g, tl, bl, '#929faf');
-    const py = y + 1;
-    line(g, [px + 2, py], [px + 13, py], bad ? '#895463' : '#6d9eb8');
-    for (let k = 1; k <= 2; k++) line(g, [px + k * 4, y - 4], [px + 3 + k * 4, y + h - 5], bad ? '#423044' : '#223e64');
+    line(g, tl, tr, '#929faf');
+    line(g, tr, br, '#e3cfaa');
+    line(g, [px + 1, y - 1], [px + 12, y + 3], bad ? '#9c6069' : '#7eacc2');
+    for (let k = 1; k <= 2; k++) line(g, [px + k * 4, y - 5 + k], [px + 3 + k * 4, y + h - 8 + k], bad ? '#423044' : '#223e64');
     if (bad) {
       line(g, [px + 4, y - 5], [px + 9, y + 2], '#1d2436', 2);
       line(g, [px + 9, y + 2], [px + 6, y + 7], '#1d2436');
@@ -148,10 +166,10 @@ function plant(g: CanvasRenderingContext2D, m: WorldMap, healthy: boolean) {
   block(g, x, y, w, h, 7, ['#8692a2', '#657389', '#444f67']);
   for (let i = 0; i < 3; i++) {
     const tx = x + 16 + i * 21, ty = y + 25 - (i % 2) * 7;
-    oval(g, tx + 4, ty + 4, 11, 6, '#494e63');
+    oval(g, tx - 4, ty + 4, 12, 6, '#494e63');
     dot(g, tx - 8, ty - 14, '#8499ab', 17, 16);
-    dot(g, tx - 7, ty - 14, '#d0d7d0', 10, 16);
-    dot(g, tx - 6, ty - 11, '#e9e3d3', 3, 11);
+    dot(g, tx - 2, ty - 14, '#d0d7d0', 10, 16);
+    dot(g, tx + 3, ty - 11, '#e9e3d3', 3, 11);
     oval(g, tx, ty - 14, 8, 5, '#edebde');
     dot(g, tx - 6, ty - 3, color, 13, 2);
   }
@@ -205,10 +223,10 @@ export function roverStructures(m: WorldMap) {
   solar(g, m.blocks[2], false);
   solar(g, m.blocks[3], false);
   const sb = m.blocks[4];
-  const solarVariants = { canvas: surface(Math.ceil(p(sb.w)) + 20, 68), x: p(sb.x) - 2, y: p(sb.y) - 9, height: 34 };
+  const solarVariants = { canvas: surface(Math.ceil(p(sb.w)) + 25, 68), x: p(sb.x) - 15, y: p(sb.y) - 9, height: 34 };
   const valves = [m.sites.valveA, m.sites.valveB, m.sites.valveC];
   const plantBlock = m.blocks[5];
-  const px = Math.min(p(plantBlock.x), ...valves.map(v => p(v.x))) - 16;
+  const px = Math.min(p(plantBlock.x) - 26, ...valves.map(v => p(v.x) - 21));
   const py = Math.min(p(plantBlock.y), ...valves.map(v => p(v.y))) - 18;
   const pw = Math.ceil(Math.max(p(plantBlock.x + plantBlock.w), ...valves.map(v => p(v.x))) - px + 24);
   const ph = Math.ceil(Math.max(p(plantBlock.y + plantBlock.h), ...valves.map(v => p(v.y))) - py + 16);

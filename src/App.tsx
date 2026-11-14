@@ -42,6 +42,7 @@ export default function App() {
   const { t } = useI18n();
   /** Guards against an expedition result being applied twice (double tap, repeated events). */
   const exitDone = useRef(false);
+  const seenBaseWarnings = useRef(new Set<string>());
 
   // Autosave while a game is open. During exploration the base state is unchanged, so the save is
   // the last safe base state (checkpoint) plus the id of the expedition in progress.
@@ -55,6 +56,7 @@ export default function App() {
 
   const startFresh = () => {
     clearSave(storage);
+    seenBaseWarnings.current.clear();
     const fresh = createInitialState(MISSION);
     // Development-only QA shortcut: ?devShift=N starts at shift N (stripped from production builds)
     const dev = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('devShift')) : 0;
@@ -79,6 +81,7 @@ export default function App() {
   /** Recover from a crash caused by unexpected saved data: drop the save and return to the menu. */
   const recover = () => {
     clearSave(storage);
+    seenBaseWarnings.current.clear();
     setSaved(false);
     setGame(createInitialState(MISSION));
     setExpedition(null);
@@ -112,6 +115,7 @@ export default function App() {
             onExplore={(id) => { exitDone.current = false; setNotice(null); setExpedition(id); setScreen('explore'); }}
             fx={fx}
             onToggleFx={toggleFx}
+            seenWarnings={seenBaseWarnings.current}
           />
         )}
         {screen === 'explore' && expedition && (

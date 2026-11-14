@@ -14,6 +14,7 @@ import { drawFrame, mapDistance, type Marker } from '../rover/render';
 import { createRover, dist, ROVER, stepRover, type Input, type Rover } from '../rover/sim';
 import { cameraZoom, joystickVector, knobOffset, renderDpr } from '../rover/touch';
 import { MAP, type Site } from '../rover/world';
+import { useWarningQueue, WarningBanner, type MissionWarning } from './WarningBanner';
 
 type SiteId = Site['id'];
 type StepKind = 'goto' | 'circuit' | 'pickup' | 'scan' | 'pressure' | 'collect' | 'dock';
@@ -102,7 +103,9 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   const failuresRef = useRef(0);
   failuresRef.current = failures;
   const [flash, setFlash] = useState<string | null>(null);
-  const [hud, setHud] = useState<Hud>({ battery: ROVER.batteryStart, rate: 0, zone: 'sun', near: null, time: 0, drill: 0, distance: null });
+  const { warning, add: warn, clear: clearWarnings } = useWarningQueue();
+  const batteryWarningsShown = useRef<0 | 1 | 2>(0);
+  const [hud, setHud] = useState<Hud>({ battery: ROVER.batteryStart, rate: -ROVER.sunDrain, zone: 'sun', near: null, time: 0, drill: 0, distance: null });
   const [touchUI, setTouchUI] = useState(prefersTouch);
   touchRef.current = touchUI;
   const [portrait, setPortrait] = useState(() => typeof window !== 'undefined' && window.innerHeight > window.innerWidth);
@@ -190,6 +193,8 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
 
   const restart = useCallback(() => {
     rover.current = createRover(MAP);
+    batteryWarningsShown.current = 0;
+    clearWarnings();
     vis.current = createVis();
     time.current = 0;
     cargo.current = false;
@@ -209,7 +214,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     setPause(false);
     setStep(0);
     setPhase('play');
-  }, []);
+  }, [clearWarnings]);
 
   const interact = useCallback(() => {
     const s = def.steps[stepRef.current];
@@ -337,11 +342,11 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     if (ro && wrapRef.current) ro.observe(wrapRef.current);
     window.addEventListener('resize', measure);
     const labels = {
-      shadow: t('ex.map.shadow'), deep: t('ex.map.deep'), dock: t('ex.map.dock'), charger: t('ex.map.charger'), solarB: t('ex.map.solarB'),
+      shadow: t('ex.map.shadow'), deep: t('ex.map.deep', { deep: ROVER.deepDrain }), dock: t('ex.map.dock'), charger: t('ex.map.charger'), solarB: t('ex.map.solarB'),
       base: t('ex.map.base'), oxygen: t('ex.map.oxygen'), samples: t('ex.map.samples'), depot: t('ex.map.depot'),
     };
     let alive = true;
-    let idle = 1, bumpCool = 0, trackPrune = 0, prevNear: SiteId | null = null, prevLevel = batteryLevel(rover.current.battery);
+    let idle = 1, bumpCool = 0, trackPrune = 0, prevNear: SiteId | null = null;
     const frame = (now: number) => {
       // stop if the screen was closed (a late frame can arrive after unmount)
       if (!alive || !wrapRef.current || !canvasRef.current) return;
@@ -430,14 +435,21 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
             drill.current = 0; // moving away or driving cancels drilling
           }
         }
-        // battery warnings when crossing 25 % and 10 % (once per crossing)
+        // One large warning per threshold per sortie attempt. The HUD keeps showing the current level.
         const lvl = batteryLevel(R.battery);
-        if (lvl > prevLevel) {
+        if (lvl > batteryWarningsShown.current) {
+          const messages: MissionWarning[] = [];
+          if (batteryWarningsShown.current === 0) {
+            messages.push({ id: 'battery-low', tone: 'caution', title: 'notice.battery.low', action: 'notice.battery.action' });
+          }
+          if (lvl === 2) {
+            messages.push({ id: 'battery-critical', tone: 'critical', title: 'notice.battery.critical', action: 'notice.battery.urgent' });
+          }
+          batteryWarningsShown.current = lvl;
+          warn(...messages);
           pop('warn', R.x, R.y);
-          say(t(lvl === 2 ? 'ex.warn.crit' : 'ex.warn.low'), 2200);
           vibrate(lvl === 2 ? [40, 60, 40] : 30);
         }
-        prevLevel = lvl;
         if (rover.current.battery <= 0) { setPhase('failed'); setFailures((f) => f + 1); }
       }
       // gas from the leaking valve (Mission 2 clue)
@@ -498,7 +510,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     raf = requestAnimationFrame(frame);
     return () => { alive = false; cancelAnimationFrame(raf); ro?.disconnect(); window.removeEventListener('resize', measure); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, def, targetSites, fx]);
+  }, [t, def, targetSites, fx, warn]);
 
   // ---------- touch controls ----------
   const onStick = (ax: number, ay: number) => { const d = snapDirection(ax, ay); input.current.ax = d.x; input.current.ay = d.y; };
@@ -533,6 +545,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
     <div className={`explore screen ${fx ? '' : 'no-fx'} ${touchUI ? 'touch' : ''}`}
       onPointerDown={(e) => { if (e.pointerType === 'touch' && !touchUI) setTouchUI(true); }}
       onContextMenu={(e) => e.preventDefault()}>
+      <WarningBanner warning={warning} />
       <header className="ex-top panel">
         <div className="ex-mission">
           <span className="tag">{t('ex.badge')}</span>
@@ -570,9 +583,9 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
             <div className="ex-card panel">
               <span className="badge-data game">{t('ex.badge')}</span>
               <h2>{t(def.title)}</h2>
-              <p>{t(def.brief, { pct, leak: exp.oxygenLeak ?? 0, reward: exp.rewardResearch ?? 0 })}</p>
+              <p>{t(def.brief, { pct, leak: exp.oxygenLeak ?? 0, reward: exp.rewardResearch ?? 0, deep: ROVER.deepDrain })}</p>
               <ol>{def.steps.map((s, i) => <li key={i}>{stepText(s)}</li>)}</ol>
-              <p className="ex-tip">{t('ex.brief.battery', { sun: ROVER.sunCharge, shadow: ROVER.shadowDrain, move: ROVER.moveDrain })}</p>
+              <p className="ex-tip">{t('ex.brief.battery', { sun: ROVER.sunDrain, shadow: ROVER.shadowDrain, deep: ROVER.deepDrain, move: ROVER.moveDrain, charge: ROVER.padCharge })}</p>
               <p className="ex-tip">{touchUI ? t('ex.touch.controls') : t('ex.controls')}</p>
               {touchUI && portrait && <p className="ex-tip ex-rotate">{t('ex.touch.rotate')}</p>}
               <div className="ex-actions">
@@ -681,9 +694,9 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
         <span className="ex-keys">{t('ex.controls')}</span>
         <span className={`ex-prompt ${prompt ? 'show' : ''}`}>{prompt ?? (playing && step.kind === 'circuit' ? t('ex.pz.short') : playing && step.kind === 'pressure' ? t('ex.o2.pz.short') : '')}</span>
         <span className="ex-warn">
-          {low && phase !== 'failed' && <b className="crit">{t('ex.warn.low')}</b>}
+          {low && phase !== 'failed' && <b className="crit">{t(hud.battery < 10 ? 'ex.warn.crit' : 'ex.warn.low')}</b>}
           {!low && hud.zone === 'shadow' && <b>{t('ex.warn.shadow')}</b>}
-          {!low && hud.zone === 'deep' && <b className="crit">{t('ex.warn.deep')}</b>}
+          {!low && hud.zone === 'deep' && <b className="crit">{t('ex.warn.deep', { deep: ROVER.deepDrain })}</b>}
         </span>
       </footer>
     </div>
