@@ -24,6 +24,19 @@ export const ko: Record<keyof typeof en, string> = {
   // 공통
   'common.back': '뒤로',
   'common.startMission': '임무 시작',
+  'common.cancel': '취소',
+
+  // 저장 / 이어하기
+  'save.continue': '이어하기',
+  'save.newGame': '새 게임',
+  'save.slot': '{n}/{total}교대 · 자동 저장됨',
+  'save.slotDone': '임무 완료 · 결과 보기',
+  'save.confirmTitle': '새 게임을 시작할까요?',
+  'save.confirmBody': '저장된 임무({n}/{total}교대)가 새 게임으로 덮어써집니다. 되돌릴 수 없습니다.',
+  'save.confirmYes': '새 게임 시작',
+  'save.invalid': '저장된 게임을 읽을 수 없어(손상되었거나 다른 버전) 삭제했습니다. 새 임무를 시작할 수 있습니다.',
+  'save.resumed': '로버 탐사 도중 게임이 종료되었습니다. 로버를 출발시키기 직전의 기지 상태로 돌아왔습니다. 얻거나 잃은 것은 없으며, 로버를 다시 출발시킬 수 있습니다.',
+  'save.note': '진행 상황은 이 브라우저에만 저장됩니다(계정·개인 정보 없음).',
 
   // 자원
   'res.energy': '배터리 전력',

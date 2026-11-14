@@ -44,7 +44,15 @@ export function Starfield() {
 }
 
 /* ---------------- Main menu ---------------- */
-export function MainMenu({ onStart, onHow, onCredits }: { onStart: () => void; onHow: () => void; onCredits: () => void }) {
+export interface SaveSlot { shift: number; total: number; finished: boolean }
+
+export function MainMenu({ onStart, onHow, onCredits, onContinue, slot, notice }: {
+  onStart: () => void; onHow: () => void; onCredits: () => void;
+  /** Present when a saved game exists. */
+  onContinue?: () => void; slot?: SaveSlot | null;
+  /** One-off message about the save (cleared damaged save, interrupted expedition). */
+  notice?: string | null;
+}) {
   const { t } = useI18n();
   return (
     <div className="screen menu">
@@ -54,11 +62,39 @@ export function MainMenu({ onStart, onHow, onCredits }: { onStart: () => void; o
       {t('menu.titleSub') && <div className="title-sub">{t('menu.titleSub')}</div>}
       <p className="sub">{t('menu.sub')}</p>
       <div className="menu-buttons">
-        <button className="btn btn-primary" onClick={onStart} autoFocus>{t('menu.start')}</button>
+        {onContinue && slot ? (
+          <>
+            <button className="btn btn-primary btn-continue" onClick={onContinue} autoFocus>
+              {t('save.continue')}
+              <small>{slot.finished ? t('save.slotDone') : t('save.slot', { n: slot.shift, total: slot.total })}</small>
+            </button>
+            <button className="btn" onClick={onStart}>{t('save.newGame')}</button>
+          </>
+        ) : (
+          <button className="btn btn-primary" onClick={onStart} autoFocus>{t('menu.start')}</button>
+        )}
         <button className="btn" onClick={onHow}>{t('menu.how')}</button>
         <button className="btn" onClick={onCredits}>{t('menu.credits')}</button>
       </div>
-      <div className="menu-foot">{t('menu.foot')}</div>
+      {notice && <p className="save-notice" role="status">{notice}</p>}
+      <div className="menu-foot">{t('menu.foot')}<br /><span className="save-note">{t('save.note')}</span></div>
+    </div>
+  );
+}
+
+/* ---------------- New-game confirmation ---------------- */
+export function ConfirmNewGame({ slot, onYes, onNo }: { slot: SaveSlot; onYes: () => void; onNo: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-title" onKeyDown={(e) => { if (e.key === 'Escape') onNo(); }}>
+      <div className="modal panel confirm-modal">
+        <h2 id="confirm-title">{t('save.confirmTitle')}</h2>
+        <p>{t('save.confirmBody', { n: slot.shift, total: slot.total })}</p>
+        <div className="actions">
+          <button className="btn" onClick={onNo} autoFocus>{t('common.cancel')}</button>
+          <button className="btn btn-danger" onClick={onYes}>{t('save.confirmYes')}</button>
+        </div>
+      </div>
     </div>
   );
 }

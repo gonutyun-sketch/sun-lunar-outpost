@@ -25,6 +25,19 @@ export const en = {
   // Shared
   'common.back': 'Back',
   'common.startMission': 'Start Mission',
+  'common.cancel': 'Cancel',
+
+  // Save / continue
+  'save.continue': 'CONTINUE',
+  'save.newGame': 'NEW GAME',
+  'save.slot': 'Shift {n}/{total} · saved automatically',
+  'save.slotDone': 'Mission finished · view results',
+  'save.confirmTitle': 'Start a new game?',
+  'save.confirmBody': 'Your saved mission (shift {n}/{total}) will be overwritten. This cannot be undone.',
+  'save.confirmYes': 'Start new game',
+  'save.invalid': 'The saved game could not be read (damaged or from another version), so it was cleared. You can start a new mission.',
+  'save.resumed': 'The game was closed during a rover expedition. You are back at the base as it was just before launch — nothing was gained or lost, and you can launch the rover again.',
+  'save.note': 'Progress is saved in this browser only (no account, no personal data).',
 
   // Resources
   'res.energy': 'Battery',
