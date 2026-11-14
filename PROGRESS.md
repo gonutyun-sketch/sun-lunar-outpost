@@ -13,6 +13,8 @@ _Last updated: 2026-11-14 (Phase 5)_
 | 8b | Rover P1: Mission 2 — oxygen plant repair (parts, leak scan, pressure minigame) | ✅ Done (awaiting play-test) |
 | 8c | Rover P1: Mission 3 — science survey (3 samples, free order, deep-shadow risk, hold-E drilling) | ✅ Done (awaiting play-test) |
 | 9 | Cross-platform: responsive layouts, touch joystick/action button, touch minigames, canvas DPR/resize/zoom | ✅ Done (awaiting review; not yet tested on a physical device) |
+| 10 | Save & continue (localStorage, versioned, exploration checkpoint) | ✅ Done |
+| 11 | Rover polish: graphics, mission effects, camera/feedback, battery warnings, performance | ✅ Done (emulator-tested only) |
 | 6 | Public deployment, final QA, submission | ⏳ Needs GitHub/hosting account action by the team |
 
 ## Phase 5 delivered
@@ -85,6 +87,22 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Layout: <1100 px single-column base screen with fixed bottom action bar (Advance + rover launcher); <640 px phone layout (short resource names, chips under the scene, 3-col report deltas); compact exploration HUD in short landscape; 44 px targets on touch (`html.touch` + pointer: coarse); safe-area insets; dvh heights.
 - QA tools (dev only): `?devShift=N` start shift, `tools/qa-responsive.js` (overflow / cut / <44 px / overlap checks + synthetic touch), `tools/qa-sweep.js` (15 screens per viewport).
 
+## Save & continue (2026-11-14)
+- `src/game/save.ts` (pure, tested): localStorage key `sun-save` = `{ v: 1, savedAt, state: GameState, exploring }`. No personal data. Language (`sun-lang`) and effects (`sun-fx`) keep their own keys.
+- Autosave in App on every game-state change while a game is open (mission / explore / results).
+- Exploration checkpoint: the base state is never changed while exploring, so the save always holds the last safe base state plus `exploring: <id>`. Reload during a run → menu notice, back at the base before launch (nothing gained or lost; the mission can be relaunched). The result is applied once when the run ends (`applyExpedition` ignores a repeated success; App guards double exit).
+- Load validation: wrong JSON / other version / invalid shape → save removed, menu notice, normal new start. An error boundary also clears the save and returns to the menu if a screen ever crashes on unexpected data.
+- Menu: CONTINUE (shows shift n/12, or "mission finished · view results") + NEW GAME (confirmation dialog only when an unfinished mission would be overwritten). Results → RESTART starts a new game.
+- Known limit: reloading mid-expedition also discards failed attempts made during that run (no cost applied) — accepted for the checkpoint design.
+
+## Rover polish (2026-11-14)
+- Visual-only state in `src/rover/fx.ts` (pure, tested): particles (cap 140, in-place update), wheel tracks (cap 320, fade 45 s), feedback bursts (cap 8), smooth look-ahead camera (rover always ≥ 25 % from the view edges), battery levels, joystick axis snap. Physics/battery/collisions/mission rules in `sim.ts`/`world.ts` are **unchanged** (route-time tests unchanged).
+- Render (`render.ts`): six-wheel rover with moving treads, rocker arms, solar deck with glint, camera mast, headlights (beam in shadow), brake lights, blinking status LED, body lean on accel/brake, drill vibration; terrain with albedo patches, craterlets, pebbles, crater ejecta and west/east lighting, faceted rocks; deep shadow with mist, rim glow and frost; distinct solar rows (cells, posts, glint, cracked/red broken panels, sparks, status lamps) vs oxygen plant (white tanks with cyan bands, compressor, pipes with O₂ flow when working); clearer goal markers (rotating dashes, bobbing arrow, filled when in reach); off-screen arrow with distance.
+- Mission effects: M1 current flowing through powered circuit tiles + array lights up panel by panel after repair; M2 gas particles from the leaking valve + cyan pressure rings and pipe flow when stabilised; M3 regolith spray and vibration while drilling, sample burst, "all samples" big burst + toast.
+- Feedback: arrival ping (and short vibration on touch), success/info/warning bursts, "too far" message when E is pressed out of range, battery warnings at < 25 % and < 10 % (toast, red screen pulse, blinking HUD), soft bump (rate-limited shake + dust/sparks).
+- Touch: joystick hit area +26 px, near-axis snap (±8°, speed unchanged), haptics where supported.
+- Performance: only the visible terrain part is copied per frame; paused/briefing screens redraw at ~12 fps; dt capped at 50 ms (hidden tab / slow device never makes the rover jump); effects off or OS reduced-motion → no particles, shake, vibration or animated pulses.
+
 ## Remaining (priority order)
 1. **P0** Create GitHub repo, push, enable Pages (steps in HANDOFF.md) → public demo URL, add to README.
 2. **P1** Team decision on difficulty (above). If changed: update mission.json + tests.
@@ -92,12 +110,13 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 4. **P2** Optional: sound, more scene detail.
 
 ## Known issues
-- No git remote yet; commits local only.
 - Control panel may still scroll slightly at 1366×768 when 2+ warnings are shown (all critical warnings are now above the fold).
 - Mid-transition screenshots can show the fading shift banner (cosmetic).
 
-## Last test results (2026-11-14, cross-platform)
-- `npm run typecheck` ✅ · `npm test` ✅ 61/61 · `npm run build` ✅ (dev hooks and devShift absent from bundle)
-- Viewport sweep (browser-pane emulation, 15 screens each: menu, how-to, credits, base+emergency, decision, rover menu, M1 briefing/driving/circuit/pause, M2 pressure, M3 briefing/sample, shift report, results): 320×568, 375×667, 390×844, 844×390, 768×1024, 1024×768, 1366×768, 1920×1080 — all OK (no horizontal scroll, nothing cut, no touch target <44 px on touch, no overlaps, Advance visible).
-- Touch-only play-tests (synthetic touch PointerEvents, no keyboard): M3 complete in 390×844 portrait (incl. multitouch: drilling cancelled by joystick; pointercancel releases); M1 started in portrait, rotated to 844×390 mid-drive (position/step kept, canvas 372×635 → 826×290), circuit solved by tapping 87 px tiles; M2 complete in landscape, pressure solved with ▲▼ buttons 13.3 s / 24 taps / 0 vents (keyboard: 13.0 s / 25 taps). PC keyboard regression: M1 complete at 1366×768, touch UI hidden.
-- NOT verified: real phones/tablets (iOS Safari, Android Chrome), real multi-finger hardware, iPhone notch/home indicator, real address-bar resizing; the browser pane was hidden so a timer-based frame shim was injected during tests.
+## Last test results (2026-11-14, save + rover polish)
+- `npm run typecheck` ✅ · `npm test` ✅ 79/79 (new: 10 save tests, 8 fx tests) · `npm run build` ✅ (dev hooks and devShift absent from bundle)
+- Save in the browser (dev server): new game → change switch at shift 1 → reload → CONTINUE restores identical state; played to shift 6 (Mission 1 on the way) → reload → identical; played to the end (all 3 missions, success, B 84) → reload → CONTINUE opens results; RESTART from results starts shift 1 without a dialog; NEW GAME over an unfinished mission shows the confirmation (cancel keeps the save). Reload during Mission 1 → menu notice, base state unchanged, mission relaunchable. Mission failure → energy −8 applied once (double click ignored) and saved; Mission 3 success → research +1 applied once and saved. Corrupt JSON and a wrong version → save cleared + notice, normal start.
+- Rover: Mission 1 (circuit current, array lights), Mission 2 (gas, plant visuals), Mission 3 (drill dust, sample bursts, all-samples toast) checked in the browser; battery warnings at 25 % and 10 % fired once each, HUD blinks, failure overlay at 0. Joystick (synthetic touch, 390×844): a 4°-off drag drives straight (vy 0.00), top speed still 150 px/s, release stops; arrival ping and action button shown.
+- Viewport sweep (tools/qa-sweep.js, 15–16 screens incl. new-game confirmation): 320×568, 375×667, 390×844, 844×390, 768×1024, 1024×768, 1366×768, 1920×1080 — all OK. Korean and English checked for the new texts. No console errors.
+- Frame cost (desktop browser, 1366×768, driving with dust): script ≈ 1.1 ms avg / 1.5 ms p95 per frame; particles peaked at 84 (cap 140), tracks 167 (cap 320). Effects OFF → 0 particles.
+- NOT verified: real phones/tablets (iOS Safari, Android Chrome), real GPU/CPU cost on low-end phones, real vibration, the OS reduced-motion setting (same code path as effects OFF, which was tested); a timer-based frame shim was used because the browser pane was hidden.

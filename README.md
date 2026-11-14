@@ -16,6 +16,9 @@ An educational 2D strategy game for students aged 12–18 (8–12 minutes per mi
 3. Build upgrades (Solar, Oxygen Recycler, Battery): pay energy now, gain from the next shift.
 4. Emergencies are forecast one shift ahead; when one arrives, choose one of two responses.
 5. Press **ADVANCE SHIFT** and read the shift report.
+6. Launch the rover for hands-on repair and science missions (keyboard WASD/arrows + E, or the on-screen joystick and action button on phones and tablets).
+
+Progress is saved automatically in your browser (no account, no personal data): use **CONTINUE** on the main menu to resume.
 
 **Full success:** survive 12 shifts, keep crew health ≥ 40, keep oxygen and food above 0, and complete 4 research milestones. **Score:** survival 40 + research 30 + crew safety 20 + energy reserve 10.
 
@@ -34,7 +37,7 @@ The base sits at **89.4749°S, 137.4431°W**, a ridge near Shackleton crater. It
 - **Citation:** Mazarico, E., et al. (2011), *Illumination conditions of the lunar polar regions using LOLA topography*, Icarus 211, 1066–1081, doi:10.1016/j.icarus.2010.10.030. Visual reference: NASA SVS 4930.
 
 ## Tech
-React 18 + TypeScript + Vite, plus Vitest. The game is a static site with no backend, accounts, or runtime AI. All simulation rules are pure functions in `src/game/engine.ts` and are covered by 33 tests plus balance bots; an exact best-play search (`npm run analyze`) confirms a perfect 100 is possible.
+React 18 + TypeScript + Vite, plus Vitest. The game is a static site with no backend, accounts, or runtime AI. All simulation rules are pure functions in `src/game/engine.ts` and are covered by unit tests (79 in total, incl. save/continue and rover physics) plus balance bots; an exact best-play search (`npm run analyze`) confirms a perfect 100 is possible.
 
 ```bash
 npm run typecheck

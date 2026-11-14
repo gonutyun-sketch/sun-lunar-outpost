@@ -27,6 +27,7 @@ src/game/engine.ts      PURE simulation: simulateShift, advanceShift, getWarning
 src/game/debrief.ts     Results text + 3 takeaways
 src/game/engine.test.ts Unit tests (incl. a reference winning plan = 95/A)
 src/game/analysis.ts    Balance bots: bestPlay (exact DP), sensiblePolicy, randomPolicy, simulate (seeded)
+src/game/save.ts        Save/continue: versioned localStorage file, validation, checkpoint marker (pure, tested in save.test.ts)
 src/game/balance.test.ts Strategy/balance tests (sensible bot wins, no-upgrade fails, every choice viable, random < 15%)
 tools/best-play.test.ts Exact best-play search — run with `npm run analyze` (~4 min, 6 GB RAM)
 src/ui/MissionScreen.tsx Top bar, scene, controls, power budget, log, shift report modal
@@ -37,8 +38,10 @@ src/rover/sim.ts        Rover physics + battery (pure, tested)
 src/rover/circuit.ts    Circuit rotation puzzle (pure, tested)
 src/rover/pressure.ts   Pressure-regulation minigame (pure, tested)
 src/rover/render.ts     Canvas drawing (zoom-aware camera)
+src/rover/fx.ts         Visual-only state: particles, tracks, look-ahead camera, bursts, battery levels (pure, tested)
 src/rover/touch.ts      Joystick vector, camera zoom, DPR cap (pure, tested)
 tools/qa-responsive.js  Dev QA: layout checks + synthetic touch helpers (load in the browser console)
+tools/qa-playthrough.js Dev QA: plays the whole mission through the UI (__play.toShift(n), __play.toEnd()) for save/continue tests
 tools/qa-sweep.js       Dev QA: walks all 15 screens at the current viewport (use with ?devShift=9)
 src/ui/Screens.tsx      Starfield, MainMenu, HowToPlay, Credits, Results (+ graph)
 src/App.tsx             Screen routing, effects toggle
@@ -66,6 +69,15 @@ Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(ba
 1. After deployment: add URL to README, run a full playthrough on the live URL.
 2. Apply the team's difficulty decision (see PROGRESS.md "Balance findings") if any.
 3. Submission materials.
+
+## Save notes
+- Bump `SAVE_VERSION` in src/game/save.ts whenever GameState changes shape; old saves are then discarded safely (or add a migration in `loadGame`).
+- `isValidState` checks every field the UI reads; extend it when you add state.
+- Never write to the save while exploring except through App (checkpoint = base state + `exploring`).
+
+## Rover visuals notes
+- Anything that only changes what is drawn goes in src/rover/fx.ts / render.ts. Do not change ROVER constants, world.ts geometry or collision code without re-running `npx vitest run src/rover` and comparing route times.
+- Respect `motion` (effects on and no reduced-motion) for anything animated; keep particle caps.
 
 ## Responsive / touch notes
 - Breakpoints: >1100 desktop grid; ≤1100 single column + fixed bottom action bar; ≤640 phone; max-height 500 landscape = compact exploration HUD.

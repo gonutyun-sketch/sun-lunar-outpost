@@ -139,7 +139,7 @@ export function ExploreScreen({ missionId, onExit, fx }: Props) {
   if (import.meta.env.DEV) {
     const w = window as unknown as Record<string, unknown>;
     w.__rover = rover;
-    w.__explore = { pressureRef, stepRef, faulty: () => FAULTY[failuresRef.current % 3] };
+    w.__explore = { pressureRef, stepRef, vis, faulty: () => FAULTY[failuresRef.current % 3] };
   }
 
   const setPhase = (p: Phase) => { phaseRef.current = p; setPhaseState(p); };

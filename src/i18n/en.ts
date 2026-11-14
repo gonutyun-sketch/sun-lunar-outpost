@@ -99,7 +99,7 @@ export const en = {
   'mission.fxOff': 'OFF',
   'mission.fxTip': 'Turn visual effects on or off (the game stays fully readable)',
   'mission.menu': 'Menu',
-  'mission.menuTip': 'Return to the main menu (the mission restarts from there)',
+  'mission.menuTip': 'Return to the main menu (progress is saved — choose Continue to resume)',
 
   // Scene
   'banner.shift': 'SHIFT {n}',

@@ -31,11 +31,18 @@
     const C = (l) => R.push(__qa.check(l));
     window.scrollTo(0, 0);
     C('menu');
-    await click($$('.menu-buttons button')[1]); C('how-to'); window.scrollTo(0, 0);
+    const mb = () => $$('.menu-buttons button');
+    await click(mb()[mb().length - 2]); C('how-to'); window.scrollTo(0, 0);
     await click($$('.header-actions .btn')[0]);
-    await click($$('.menu-buttons button')[2]); C('credits'); window.scrollTo(0, 0);
+    await click(mb()[mb().length - 1]); C('credits'); window.scrollTo(0, 0);
     await click($$('.header-actions .btn')[0]);
-    await click($$('.menu-buttons button')[0], 500); C('base + emergency (shift 9)');
+    if ($('.btn-continue')) {
+      // a saved game exists: New game -> confirmation dialog -> confirm
+      // (no dialog when the saved game has no progress to lose)
+      await click(mb()[1], 300);
+      if ($('.confirm-modal')) { C('new-game confirm'); await click($('.confirm-modal .btn-danger'), 500); }
+    } else await click(mb()[0], 500);
+    C('base + emergency (shift 9)');
     await click($('.event-card .choice'), 300); C('emergency decided');
     await click($('.rover-launch > .btn-rover')); C('rover menu'); await click($('.rover-launch > .btn-rover'));
     // Mission 1: briefing, driving, circuit, pause

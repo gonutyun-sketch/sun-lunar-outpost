@@ -98,7 +98,7 @@ export const ko: Record<keyof typeof en, string> = {
   'mission.fxOff': '꺼짐',
   'mission.fxTip': '시각 효과를 켜거나 끕니다 (꺼도 게임 내용은 모두 보입니다)',
   'mission.menu': '메뉴',
-  'mission.menuTip': '메인 메뉴로 돌아갑니다 (임무는 처음부터 다시 시작됩니다)',
+  'mission.menuTip': '메인 메뉴로 돌아갑니다 (진행 상황은 저장되며, 이어하기로 계속할 수 있습니다)',
 
   // 장면
   'banner.shift': '교대 {n}',

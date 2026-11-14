@@ -12,6 +12,7 @@
 - Gameplay screenshots in docs/screenshots/ are captures of the actual game (not generated images).
 - Korean/English localisation system and the Korean translation of all UI and educational text (to be reviewed by Korean-speaking team members).
 - Gameplay v2 design proposal and implementation (upgrades, emergencies, chapters), balance bots and the exact best-play search; the numbers were tuned by simulation and should be reviewed by the team after human play-testing.
+- Save & continue system (localStorage, validation, checkpoint) and rover visual/feedback polish (procedural Canvas art, effects, camera), with tests and QA scripts.
 - Cross-platform pass: responsive CSS, touch joystick/action controls, canvas sizing, QA scripts.
 - Rover Mission 3 (science survey, deep-shadow training zone, drilling) and the rover launcher menu.
 - Rover Mission 2 (supply depot, remote O₂ plant, leak scan, pressure minigame) and its tuning by simulated players.
