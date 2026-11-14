@@ -75,7 +75,12 @@ const OVERLAY: StepKind[] = ['circuit', 'pressure'];
 
 /** Respect the OS "reduce motion" setting (no shake, particles or vibration; static feedback instead). */
 /** Short haptic pulse on phones that support it (ignored elsewhere). */
-const buzz = (pattern: number | number[]) => { try { navigator.vibrate?.(pattern); } catch { /* not supported */ } };
+const buzz = (pattern: number | number[]) => {
+  // browsers refuse (and log an error) before the first real tap on the page
+  const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+  if (ua && !ua.hasBeenActive) return;
+  try { navigator.vibrate?.(pattern); } catch { /* not supported */ }
+};
 
 export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
   const { t } = useI18n();

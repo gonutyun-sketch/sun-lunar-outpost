@@ -20,7 +20,7 @@ export const ko: Record<keyof typeof en, string> = {
   'menu.start': '임무 시작',
   'menu.how': '플레이 방법',
   'menu.credits': '과학 자료 및 제작진',
-  'menu.foot': '팀 SUN · 12–18세 교육용 게임 · 플레이 시간 8–12분',
+  'menu.foot': '팀 SUN · 초·중학생을 위한 교육용 게임 · 플레이 시간 8–12분',
 
   // 공통
   'common.back': '뒤로',

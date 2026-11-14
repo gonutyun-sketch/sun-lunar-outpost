@@ -21,7 +21,7 @@ export const en = {
   'menu.start': 'START MISSION',
   'menu.how': 'How to Play',
   'menu.credits': 'Science & Credits',
-  'menu.foot': 'Team SUN · Educational game for ages 12–18 · 8–12 minutes',
+  'menu.foot': 'Team SUN · Educational game for elementary and middle-school students · 8–12 minutes',
 
   // Shared
   'common.back': 'Back',

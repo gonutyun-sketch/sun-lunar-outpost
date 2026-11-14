@@ -22,6 +22,9 @@
     return !(r.right <= q.left || q.right <= r.left || r.bottom <= q.top || q.bottom <= r.top);
   };
   function check(label) {
+    // measure final layout: entrance animations (e.g. the action button pop) would otherwise be caught mid-scale,
+    // and a hidden browser pane never advances them
+    for (const a of document.getAnimations?.() ?? []) { try { if (a.effect?.getTiming().iterations !== Infinity) a.finish(); } catch { /* ignore */ } }
     const coarse = matchMedia('(pointer: coarse)').matches || document.documentElement.classList.contains('touch');
     const W = innerWidth;
     const out = { label, vw: `${innerWidth}x${innerHeight}`, hScroll: document.documentElement.scrollWidth > W + 1, cut: [], small: [], overlaps: [] };

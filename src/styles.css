@@ -1208,3 +1208,5 @@ html.touch .ex-controls .action-btn { touch-action: none; }
   .diff-nums b { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { .diff-card { transition: none; } }
+@media (pointer: coarse) { .coach-close, .qa-go { min-height: 44px; min-width: 44px; } }
+html.touch .coach-close, html.touch .qa-go { min-height: 44px; min-width: 44px; }
