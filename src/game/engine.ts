@@ -34,6 +34,7 @@ export function createInitialState(cfg: MissionConfig): GameState {
     choice: null,
     expeditionsDone: [],
     expeditionFails: 0,
+    expeditionLog: [],
     status: 'playing',
     history: [],
   };
@@ -118,12 +119,35 @@ export interface ShiftContext {
   choice?: string | null;
   /** Solar array damaged by an unfinished expedition (multiplies solar output). */
   damageMult?: number;
+  /** Oxygen recycler damaged by an unfinished expedition (multiplies O₂ output). */
+  oxygenDamageMult?: number;
+  /** Extra oxygen lost per shift to a leak from an unfinished expedition. */
+  oxygenLeak?: number;
 }
 
 /** Expedition that can be launched now (available and not yet completed). */
 export function activeExpedition(state: GameState, cfg: MissionConfig): ExpeditionConfig | undefined {
-  if (state.status !== 'playing') return undefined;
-  return cfg.expeditions.find((e) => state.shift >= e.fromShift && !state.expeditionsDone.includes(e.id));
+  return activeExpeditions(state, cfg)[0];
+}
+
+/** All expeditions that can be launched now (several may be pending at once). */
+export function activeExpeditions(state: GameState, cfg: MissionConfig): ExpeditionConfig[] {
+  if (state.status !== 'playing') return [];
+  return cfg.expeditions.filter((e) => state.shift >= e.fromShift && !state.expeditionsDone.includes(e.id));
+}
+
+/** Extra oxygen lost per shift to leaks that an expedition has not repaired yet. */
+export function oxygenLeak(state: GameState, cfg: MissionConfig): number {
+  return cfg.expeditions
+    .filter((e) => e.oxygenLeak && state.shift >= e.fromShift && !state.expeditionsDone.includes(e.id))
+    .reduce((s, e) => s + (e.oxygenLeak ?? 0), 0);
+}
+
+/** Oxygen recycler output multiplier from damage that an expedition has not repaired yet. */
+export function oxygenDamageMult(state: GameState, cfg: MissionConfig): number {
+  return cfg.expeditions
+    .filter((e) => e.oxygenMult !== undefined && state.shift >= e.fromShift && !state.expeditionsDone.includes(e.id))
+    .reduce((m, e) => m * (e.oxygenMult ?? 1), 1);
 }
 
 /** Solar output multiplier from damage that an expedition has not repaired yet. */
@@ -140,10 +164,16 @@ export function solarDamageMult(state: GameState, cfg: MissionConfig): number {
 export function applyExpedition(state: GameState, cfg: MissionConfig, id: string, result: { success: boolean; failures: number }): GameState {
   const exp = cfg.expeditions.find((e) => e.id === id);
   if (!exp || state.status !== 'playing' || state.expeditionsDone.includes(id)) return state;
-  const cost = exp.failEnergyCost * Math.max(0, result.failures);
+  const fails = Math.max(0, result.failures);
+  const cost = exp.failEnergyCost * fails;
+  const o2 = (exp.failOxygenCost ?? 0) * fails;
+  // Keep oxygen above zero here; a vented failure hurts, but cannot end the mission outside a shift.
+  const oxygen = o2 ? Math.max(1, state.resources.oxygen - o2) : state.resources.oxygen;
+  if (!result.success && fails === 0) return state; // aborted without trying: nothing changes
   return {
     ...state,
-    resources: { ...state.resources, energy: Math.max(0, state.resources.energy - cost) },
+    resources: { ...state.resources, energy: Math.max(0, state.resources.energy - cost), oxygen },
+    expeditionLog: [...state.expeditionLog, { shift: state.shift, id, success: result.success, failures: fails }],
     expeditionsDone: result.success ? [...state.expeditionsDone, id] : state.expeditionsDone,
     expeditionFails: state.expeditionFails + Math.max(0, result.failures),
   };
@@ -198,9 +228,11 @@ export function simulateShift(
   const running = (id: FacilityId) => ran[id] && !habitatPowerFailure;
 
   // Oxygen & food
-  const oxygenProduced = running('oxygen') ? Math.round(oxygenOutput(cfg, upgrades) * (choice?.oxygenProdMult ?? 1)) : 0;
+  const o2DamageMult = ctx.oxygenDamageMult ?? 1;
+  const oxygenProduced = running('oxygen') ? Math.round(oxygenOutput(cfg, upgrades) * (choice?.oxygenProdMult ?? 1) * o2DamageMult) : 0;
   const foodProduced = running('greenhouse') ? cfg.facilities.greenhouse.produces : 0;
-  const oxygen = clamp(before.oxygen + oxygenProduced - cfg.crew.oxygenUse, 0, cap.oxygen);
+  const leak = ctx.oxygenLeak ?? 0;
+  const oxygen = clamp(before.oxygen + oxygenProduced - cfg.crew.oxygenUse - leak, 0, cap.oxygen);
   const food = clamp(before.food + foodProduced - cfg.crew.foodUse + (choice?.food ?? 0), 0, cap.food);
 
   // Radiation & other health effects
@@ -227,6 +259,8 @@ export function simulateShift(
     scenarioModifier: sc.scenarioModifier,
     solar,
     solarDamaged: damageMult < 1,
+    oxygenDamaged: o2DamageMult < 1,
+    oxygenLeak: leak,
     capacity,
     available,
     demand,
@@ -254,6 +288,8 @@ export function projectCurrentShift(state: GameState, cfg: MissionConfig): Shift
     build: state.build,
     choice: state.choice,
     damageMult: solarDamageMult(state, cfg),
+    oxygenDamageMult: oxygenDamageMult(state, cfg),
+    oxygenLeak: oxygenLeak(state, cfg),
   });
 }
 
@@ -307,8 +343,11 @@ export function advanceShift(state: GameState, cfg: MissionConfig): GameState {
   const base = { ...state, resources: outcome.after, history, upgrades, build: null, choice: null };
   if (failReason) return { ...base, status: 'failed', failReason };
 
-  // Lab switches off automatically once all milestones are complete.
-  const facilities = outcome.after.research >= cfg.capacity.research ? { ...state.facilities, lab: false } : state.facilities;
+  // Lab switches off automatically once all milestones are complete; facilities an emergency decision
+  // switched on (e.g. the storm shelter) switch back off after that shift.
+  let facilities = outcome.after.research >= cfg.capacity.research ? { ...state.facilities, lab: false } : state.facilities;
+  const forced = getChoice(cfg, state.shift, state.choice)?.enable ?? [];
+  if (forced.length) { facilities = { ...facilities }; for (const id of forced) facilities[id] = false; }
 
   if (state.shift >= cfg.totalShifts) {
     const status = outcome.after.research >= cfg.capacity.research ? 'success' : 'partial';

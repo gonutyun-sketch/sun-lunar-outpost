@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { MISSION } from '../game/config';
 import {
-  activeExpedition,
+  activeExpeditions,
   advanceShift,
   batteryCapacity,
   canAdvance,
@@ -14,6 +14,8 @@ import {
   getWarnings,
   isFacilityAvailable,
   isForcedOn,
+  oxygenDamageMult,
+  oxygenLeak,
   oxygenOutput,
   projectCurrentShift,
   solarDamageMult,
@@ -118,6 +120,7 @@ export function explainReport(r: ShiftReport, t: T): string[] {
   out.push(t('exp.used', { n: r.habitatPowerFailure ? r.available : r.demand }));
   if (r.habitatPowerFailure) out.push(t('exp.habitatFail'));
   if (r.solarDamaged) out.push(t('exp.solarDamaged', { pct: Math.round((MISSION.expeditions[0]?.solarMult ?? 1) * 100) }));
+  if (r.oxygenDamaged || r.oxygenLeak) out.push(t('exp.oxygenDamaged', { pct: Math.round((MISSION.expeditions.find((e) => e.id === 'oxygenRepair')?.oxygenMult ?? 1) * 100), leak: r.oxygenLeak }));
   const ev = r.eventId ? MISSION.events.find((e) => e.id === r.eventId) : undefined;
   const choice = ev?.choices.find((c) => c.id === r.choiceId);
   if (ev && choice) out.push(t('exp.event', { title: t(`ev.${ev.id}.title` as Key), choice: t(`ev.${ev.id}.${choice.id}` as Key) }));
@@ -219,8 +222,10 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
   const nextUpgrades = outcome.built ? { ...state.upgrades, [outcome.built]: true } : state.upgrades;
   const nextSolar = state.shift < MISSION.totalShifts ? solarGeneration(MISSION, state.shift + 1, nextUpgrades) : null;
   const lastBuilt = state.history[state.history.length - 1]?.built ?? null;
-  const expedition = activeExpedition(state, MISSION);
+  const expeditions = activeExpeditions(state, MISSION);
   const damagePct = Math.round(solarDamageMult(state, MISSION) * 100);
+  const o2DamagePct = Math.round(oxygenDamageMult(state, MISSION) * 100);
+  const leak = oxygenLeak(state, MISSION);
   const facFocus = focus && FACILITY_IDS.includes(focus as FacilityId) ? (focus as FacilityId) : null;
   // Science briefing: hovered facility/upgrade > current emergency > shift card.
   const eduKey = focus ? `edu.${focus}` : event ? `edu.ev.${event.id}` : `edu.${state.shift}`;
@@ -285,7 +290,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
         <div className="scene-wrap panel">
           <BaseScene key={`scene-${state.shift}`} facilities={outcome.ran} illumination={outcome.illumination}
             radiation={!!event?.radiation} shift={state.shift} highlight={facFocus} upgrades={state.upgrades}
-            building={state.build} fresh={lastBuilt} battery={Math.min(1, r.energy / capacity)} dust={event?.id === 'dust' && state.choice !== 'eva'} damaged={damagePct < 100} />
+            building={state.build} fresh={lastBuilt} battery={Math.min(1, r.energy / capacity)} dust={event?.id === 'dust' && state.choice !== 'eva'} damaged={damagePct < 100} o2Damaged={o2DamagePct < 100} />
           {!ended && (
             <div className={`shift-banner ${chapterStart ? 'chapter' : ''}`} key={`banner-${state.shift}`} aria-hidden>
               {chapterStart ? (
@@ -369,9 +374,11 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
 
           <UpgradePanel state={state} setState={setState} onFocus={setFocus} />
 
-          {expedition && (
-            <div className="alert caution expedition-alert">{t('ex.pending', { pct: damagePct })}</div>
-          )}
+          {expeditions.map((x) => (
+            <div key={x.id} className="alert caution expedition-alert">
+              {x.id === 'oxygenRepair' ? t('ex.o2.pending', { pct: o2DamagePct, leak }) : t('ex.pending', { pct: damagePct })}
+            </div>
+          ))}
 
           {warnings.length > 0 && (
             <div className="alerts" role="alert">
@@ -426,9 +433,11 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
           <p>{t(`${eduKey}.text` as Key)}</p>
         </section>
         <div className="advance panel">
-          {expedition && !ended && (
-            <button className="btn btn-rover" onClick={() => onExplore(expedition.id)} title={t('ex.launchTip')}>🚙 {t('ex.launch')}</button>
-          )}
+          {!ended && expeditions.map((x) => (
+            <button key={x.id} className="btn btn-rover" onClick={() => onExplore(x.id)} title={t(x.id === 'oxygenRepair' ? 'ex.o2.launchTip' : 'ex.launchTip')}>
+              🚙 {expeditions.length > 1 ? t(`ex.short.${x.id}` as Key) : t('ex.launch')}
+            </button>
+          ))}
           {ended ? (
             <button className="btn btn-primary" onClick={onFinish}>{t('advance.results')}</button>
           ) : (
@@ -466,6 +475,12 @@ function ShiftReportModal({ report, state, onClose, onResults }: {
   if (report.researchGained) highlights.push({ cls: 'sci', text: t('report.milestone', { n: report.after.research, max: MISSION.capacity.research }) });
   if (chapterDone) highlights.push({ cls: 'ch', text: t('report.chapterDone', { n: chapterDone.id, title: t(`chapter.${chapterDone.id}.title` as Key) }) });
   if (report.radiation === 'protected') highlights.push({ cls: 'safe', text: t('exp.radSafe') });
+  for (const x of state.expeditionLog.filter((e) => e.shift === report.shift)) {
+    const exCfg = MISSION.expeditions.find((e) => e.id === x.id);
+    const name = t(`ex.short.${x.id}` as Key);
+    if (x.success) highlights.push({ cls: 'up', text: t('report.exOk', { name }) });
+    if (x.failures) highlights.push({ cls: 'fail', text: t('report.exFail', { name, n: x.failures, e: x.failures * (exCfg?.failEnergyCost ?? 0), o2: x.failures * (exCfg?.failOxygenCost ?? 0) }) });
+  }
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="report-title">
       <div className="modal panel">

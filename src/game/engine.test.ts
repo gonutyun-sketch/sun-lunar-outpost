@@ -145,6 +145,8 @@ describe('emergencies', () => {
     expect(wk.after.health).toBe(100 - e.choices.find((c) => c.id === 'work')!.radiationDamage!);
     // the shelter stays locked ON for this decision
     expect(toggleFacility(sh, MISSION, 'shelter').facilities.shelter).toBe(true);
+    // …and switches back off after the storm shift
+    expect(advanceShift(sh, MISSION).facilities.shelter).toBe(false);
     // with no decision at all the crew would be fully exposed (turn is blocked until they decide)
     const none = projectCurrentShift(at(e.shift), MISSION);
     expect(none.needsChoice).toBe(true);

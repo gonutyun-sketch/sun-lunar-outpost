@@ -89,15 +89,16 @@ export const randomPolicy: Policy = (_s, moves, rand) => moves[Math.floor(rand()
 
 /** Run n games; each turn the policy picks among moves that can actually run. */
 /** repairAt: shift at which the rover repair succeeds (null = never repaired; failures = failed attempts first). */
-export function simulate(cfg: MissionConfig, n: number, policy: Policy, seed = 1, opts: { repairAt?: number | null; failures?: number } = {}) {
+export function simulate(cfg: MissionConfig, n: number, policy: Policy, seed = 1, opts: { repairAt?: number | null; failures?: number; skip?: string[] } = {}) {
   const repairAt = opts.repairAt === undefined ? 2 : opts.repairAt;
   const rand = rng(seed);
   const tally = { success: 0, partial: 0, failed: 0, scoreSum: 0, gradeA: 0 };
   for (let g = 0; g < n; g++) {
     let s = createInitialState(cfg);
     while (s.status === 'playing') {
-      const exp = activeExpedition(s, cfg);
-      if (exp && repairAt !== null && s.shift >= repairAt) s = applyExpedition(s, cfg, exp.id, { success: true, failures: opts.failures ?? 0 });
+      for (let exp = activeExpedition(s, cfg); exp && repairAt !== null && s.shift >= repairAt && !opts.skip?.includes(exp.id); exp = activeExpedition(s, cfg)) {
+        s = applyExpedition(s, cfg, exp.id, { success: true, failures: opts.failures ?? 0 });
+      }
       const runnable = legalMoves(s, cfg).filter((m) => play(s, cfg, m));
       if (!runnable.length) { s = { ...s, status: 'failed', failReason: 'power' }; break; }
       s = play(s, cfg, policy(s, runnable, rand))!;

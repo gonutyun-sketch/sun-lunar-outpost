@@ -27,6 +27,8 @@ interface Props {
   dust?: boolean;
   /** Solar segment B damaged (rover repair pending). */
   damaged?: boolean;
+  /** Oxygen recycler damaged (rover repair pending). */
+  o2Damaged?: boolean;
 }
 
 const NONE: Upgrades = { solar: false, oxygen: false, battery: false };
@@ -56,7 +58,7 @@ const Led = ({ x, y, on }: { x: number; y: number; on: boolean }) => (
   <circle cx={x} cy={y} r={4} fill={on ? '#6CE0B2' : '#3a4a60'} className={on ? 'blink' : undefined} />
 );
 
-export function BaseScene({ facilities: f, illumination, radiation, shift, highlight, upgrades = NONE, building = null, fresh = null, battery = 0.5, dust = false, damaged = false }: Props) {
+export function BaseScene({ facilities: f, illumination, radiation, shift, highlight, upgrades = NONE, building = null, fresh = null, battery = 0.5, dust = false, damaged = false, o2Damaged = false }: Props) {
   const fx = (id: UpgradeId) => (fresh === id ? 'upg-fresh' : undefined);
   const { t } = useI18n();
   const sunY = 300 - illumination * 60; // the Sun skims the polar horizon
@@ -242,6 +244,12 @@ export function BaseScene({ facilities: f, illumination, radiation, shift, highl
         )}
         {building === 'oxygen' && !upgrades.oxygen && (
           <rect x={406} y={350} width={20} height={54} rx={10} fill="none" stroke="#F4CA65" strokeDasharray="4 3" className="blink" />
+        )}
+        {o2Damaged && (
+          <g>
+            <rect x={334} y={350} width={26} height={6} fill="#ff6b7a" className="blink" />
+            {[0, 1, 2].map((k) => <circle key={k} cx={352 + k * 6} cy={318 - k * 10} r={4 + k * 2} fill="#dbe9ff" opacity={0.35 - k * 0.08} className="blink" />)}
+          </g>
         )}
         <Led x={347} y={334} on={f.oxygen} />
         <Label x={366} y={438} text={t('scene.oxygen')} on={f.oxygen} />

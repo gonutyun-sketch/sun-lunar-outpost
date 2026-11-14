@@ -9,7 +9,7 @@ export interface Circle { x: number; y: number; r: number }
 export interface Rect { x: number; y: number; w: number; h: number }
 
 export interface Site {
-  id: 'base' | 'dock' | 'solarB' | 'oxygen' | 'samples' | 'solarFarm';
+  id: 'base' | 'dock' | 'solarB' | 'oxygen' | 'samples' | 'solarFarm' | 'depot' | 'valveA' | 'valveB' | 'valveC';
   x: number;
   y: number;
   /** Interaction radius. */
@@ -49,24 +49,30 @@ export const MAP: WorldMap = {
     { x: 1520, y: 1000, r: 38 }, { x: 1610, y: 930, r: 28 }, { x: 1700, y: 1020, r: 34 },
     { x: 1800, y: 900, r: 30 }, { x: 1880, y: 990, r: 26 }, { x: 1300, y: 880, r: 22 },
     { x: 1660, y: 840, r: 24 }, { x: 1960, y: 840, r: 30 }, { x: 2050, y: 930, r: 24 },
+    // ridge north of the base: blocks the direct way to the remote O₂ plant
+    { x: 200, y: 470, r: 36 }, { x: 270, y: 470, r: 36 }, { x: 340, y: 470, r: 36 }, { x: 410, y: 470, r: 36 },
+    { x: 480, y: 470, r: 36 }, { x: 550, y: 470, r: 36 }, { x: 620, y: 470, r: 36 },
     // scattered
-    { x: 620, y: 420, r: 30 }, { x: 980, y: 300, r: 26 }, { x: 2300, y: 250, r: 28 },
+    // (720,320) kept clear of the ridge end so the east detour has no trap pocket
+    { x: 720, y: 320, r: 30 }, { x: 980, y: 300, r: 26 }, { x: 2300, y: 250, r: 28 },
     { x: 300, y: 820, r: 26 }, { x: 900, y: 1450, r: 30 }, { x: 2450, y: 1450, r: 34 },
     { x: 1700, y: 260, r: 26 }, { x: 1180, y: 380, r: 22 },
   ],
   blocks: [
     { x: 620, y: 820, w: 170, h: 150 }, // base habitat block (dock is to the east)
-    { x: 470, y: 600, w: 110, h: 80 }, // oxygen plant
+    { x: 470, y: 600, w: 110, h: 80 }, // supply depot (spare parts)
     // solar farm panel rows (north-east)
     { x: 1900, y: 330, w: 360, h: 26 },
     { x: 1900, y: 400, w: 360, h: 26 },
     { x: 1900, y: 470, w: 360, h: 26 },
+    { x: 120, y: 160, w: 150, h: 100 }, // remote oxygen plant (north-west)
   ],
   shadows: [
     { x: 1500, y: 560, r: 330 }, // crater shadow: short route to the farm passes through it
     { x: 2190, y: 620, r: 190 }, // ridge shadow over the damaged segment B
     { x: 1960, y: 1270, r: 300 }, // permanently shadowed sample crater (training zone)
     { x: 420, y: 1300, r: 170 },
+    { x: 130, y: 360, r: 230 }, // north-west shadow: the short west gap and part of the O₂ plant
   ],
   charger: { x: 900, y: 1010, r: 42 },
   sites: {
@@ -74,7 +80,11 @@ export const MAP: WorldMap = {
     dock: { id: 'dock', x: 860, y: 900, r: 70 },
     solarFarm: { id: 'solarFarm', x: 2080, y: 413, r: 0 },
     solarB: { id: 'solarB', x: 2170, y: 545, r: 75 },
-    oxygen: { id: 'oxygen', x: 525, y: 640, r: 0 },
+    oxygen: { id: 'oxygen', x: 195, y: 210, r: 0 },
+    depot: { id: 'depot', x: 525, y: 722, r: 62 },
+    valveA: { id: 'valveA', x: 110, y: 318, r: 52 },
+    valveB: { id: 'valveB', x: 330, y: 215, r: 52 },
+    valveC: { id: 'valveC', x: 195, y: 100, r: 52 },
     samples: { id: 'samples', x: 1960, y: 1100, r: 0 },
   },
 };

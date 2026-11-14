@@ -10,7 +10,8 @@ _Last updated: 2026-11-14 (Phase 5)_
 | 5b | Korean / English localisation (default KO, switch anytime, saved) | ✅ Done |
 | 7 | Gameplay v2: 12 shifts / 3 chapters, 3 upgrades, 5 interactive emergencies, rebalance | ✅ Done (awaiting play-test review) |
 | 8 | Rover exploration P0: drive, collide, battery, Mission 1 (solar repair) + circuit puzzle, linked to base | ✅ Done (awaiting play-test) |
-| 8b | Rover P1: Mission 2 (oxygen parts), Mission 3 (samples), more minigames | ⏳ Not started (on hold for review) |
+| 8b | Rover P1: Mission 2 — oxygen plant repair (parts, leak scan, pressure minigame) | ✅ Done (awaiting play-test) |
+| 8c | Rover P1: Mission 3 — science samples (route planning, 3 sites) | ⏳ Next, after Mission 2 review |
 | 6 | Public deployment, final QA, submission | ⏳ Needs GitHub/hosting account action by the team |
 
 ## Phase 5 delivered
@@ -59,6 +60,14 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Route measurements (bot): shadowed north shortcut ≈10.7 s / battery 72 at site; sunny south detour ≈12.2 s / 79. Real UI run: reach site 71.7, after puzzle in shadow 39, back at dock 24 (low-battery warning) — tension present.
 - Balance with the repair (sensible bot): repair at Shift 2 → success 90; after 2 failed attempts → 84; never repaired → partial (research goal missed). Random clicking (with repair) 9 % success.
 
+## Rover Mission 2 — oxygen plant repair (2026-11-14)
+- Shift 6 (no emergency that shift). Until repaired: recycler ×0.5 and −4 O₂ leak per shift. Each failed attempt: −8 base energy, −5 O₂ (O₂ never drops below 1 outside a shift). Abort without trying: no cost.
+- Steps: pick up parts at the supply depot (near base) → drive to the remote O₂ plant (NW) past a rock ridge (shadowed west gap 5.0 s vs sunny east detour 7.0 s) → scan valves with E (leak puffs are a visual clue; first attempt leak = valve C, not the nearest) → pressure minigame → dock.
+- Pressure minigame (`src/rover/pressure.ts`): 3 gauges with leaks and target bands; ↑/↓ hold or on-screen buttons; a tap gives a small kick; holding accelerates past the "calm" speed → wobble; >95 vents. Hold all in band 3 s. Bots: careful taps 11.5 s; long holds never stabilise.
+- Base hookup: several pending missions each get a launch button; damage alerts; shift report shows rover results (success / failures with costs) and damage lines; results screen lists completed rover missions.
+- Balance (sensible bot): both repairs → win 90; one failed attempt on each → win 84; skip O₂ repair → mission fails.
+- Fixes found in play-test: shelter switched on by "Shelter the crew" now turns off after the storm (it silently cost 7 energy every later shift); rock moved to remove a trap pocket on the east detour; render loop stops safely if a late frame arrives after closing.
+
 ## Remaining (priority order)
 1. **P0** Create GitHub repo, push, enable Pages (steps in HANDOFF.md) → public demo URL, add to README.
 2. **P1** Team decision on difficulty (above). If changed: update mission.json + tests.
@@ -70,6 +79,7 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Control panel may still scroll slightly at 1366×768 when 2+ warnings are shown (all critical warnings are now above the fold).
 - Mid-transition screenshots can show the fading shift banner (cosmetic).
 
-## Last test results (2026-11-14, rover P0)
-- `npm run typecheck` ✅ · `npm test` ✅ 48/48 (engine 23, rover 10, balance 10, i18n 5) · `npm run build` ✅ (dev-only rover hook absent from bundle)
-- Browser 1366×768, real keyboard events: Korean — Shift 2 rover button + damage alert → briefing → drive to segment B (prompt E) → puzzle solved with ←/→/E → return → dock with E → success; base kept Shift 2 and resources, solar +22 → +27, button/alert gone. English — battery-out failure screen, Try again (battery 80 at dock), R restart confirmation, Esc pause, Back to base → base energy −8, mission still open; game continued to the end (Mission Failed, power, Shift 11 for careless no-repair play). No console errors.
+## Last test results (2026-11-14, rover Mission 2)
+- `npm run typecheck` ✅ · `npm test` ✅ 55/55 (engine 24, rover 19, balance 11, i18n 5) · `npm run build` ✅ (dev-only hooks absent from bundle)
+- Browser 1366×768 (Korean, real key events): Shift 6 shows two rover buttons + two damage alerts → Mission 2 briefing → depot pickup → west gap → valve A "OK" → valve C leak → pressure solved with 25 taps in 13 s (0 vents) → east detour → dock → success; base: O₂ recycler +10 → +20, leak gone, only Mission 1 pending; Shift 6 report lists the failed attempt (−8 energy, −5 O₂) and the success. Failure path: battery 0 in the shadow → "back to base" applied −8 energy / −5 O₂, mission stays open; abort without failure costs nothing. Mission 1 re-tested after the screen rewrite: success in 38 s.
+- Note: the browser pane was hidden during part of the test, so a timer-based frame shim was injected into the page for testing only (no code change).

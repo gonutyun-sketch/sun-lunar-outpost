@@ -232,6 +232,14 @@
       "fromShift": 2,
       "solarMult": 0.8,
       "failEnergyCost": 8
+    },
+    {
+      "id": "oxygenRepair",
+      "fromShift": 6,
+      "oxygenMult": 0.5,
+      "oxygenLeak": 4,
+      "failEnergyCost": 8,
+      "failOxygenCost": 5
     }
   ]
 }

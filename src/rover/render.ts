@@ -7,15 +7,27 @@ import type { WorldMap } from './world';
 
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number }
 
+export interface Marker {
+  x: number;
+  y: number;
+  r: number;
+  /** goal = still to do (yellow), near = in reach (green), done = checked/finished (grey) */
+  state: 'goal' | 'near' | 'done';
+  note?: string;
+}
+
 export interface FrameInfo {
   t: number; // seconds since start
-  target: { x: number; y: number; r: number } | null;
-  targetNear: boolean;
+  targets: Marker[];
   solarRepaired: boolean;
+  oxygenRepaired: boolean;
+  /** Visible gas leak (the faulty valve) — a clue for the scan step. */
+  leak: { x: number; y: number } | null;
+  cargo: boolean;
   inShadow: boolean;
   shake: number;
   particles: Particle[];
-  labels: { shadow: string; dock: string; charger: string; solarB: string; base: string; oxygen: string; samples: string };
+  labels: { shadow: string; dock: string; charger: string; solarB: string; base: string; oxygen: string; samples: string; depot: string };
 }
 
 let terrainCache: { key: string; canvas: HTMLCanvasElement } | null = null;
@@ -167,23 +179,54 @@ export function drawFrame(g: CanvasRenderingContext2D, vw: number, vh: number, m
   g.beginPath(); g.arc(d.x, d.y, d.r - 10, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
   label(g, f.labels.dock, d.x, d.y - d.r - 6, '#56C7F2');
 
-  // oxygen plant (block 1) with tanks
-  const o = m.blocks[1];
-  g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(o.x + 10, o.y + 10, o.w, o.h);
-  g.fillStyle = '#b8c0cc'; g.fillRect(o.x, o.y, o.w, o.h);
-  for (let i = 0; i < 3; i++) {
-    g.fillStyle = '#e3e8ef'; g.beginPath(); g.arc(o.x + 22 + i * 33, o.y + 40, 14, 0, Math.PI * 2); g.fill();
-    g.fillStyle = `rgba(86,199,242,${0.5 + 0.5 * Math.sin(f.t * 2.5 + i)})`; g.fillRect(o.x + 17 + i * 33, o.y + 38, 10, 4);
+  // supply depot (block 1): crates
+  const dp = m.blocks[1];
+  g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(dp.x + 10, dp.y + 10, dp.w, dp.h);
+  g.fillStyle = '#8d97a6'; g.fillRect(dp.x, dp.y, dp.w, dp.h);
+  for (let i = 0; i < 6; i++) {
+    const cx = dp.x + 8 + (i % 3) * 34, cy = dp.y + 8 + Math.floor(i / 3) * 36;
+    g.fillStyle = i % 2 ? '#c9a24a' : '#d8b55a'; g.fillRect(cx, cy, 28, 28);
+    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 2; g.strokeRect(cx, cy, 28, 28);
   }
-  label(g, f.labels.oxygen, o.x + o.w / 2, o.y - 14);
+  label(g, f.labels.depot, dp.x + dp.w / 2, dp.y - 14, '#F4CA65');
+
+  // remote oxygen plant (block 5): tanks, status lights, pipes to the three valves
+  const o = m.blocks[5];
+  if (o) {
+    g.strokeStyle = '#8d97a6'; g.lineWidth = 6;
+    for (const v of [m.sites.valveA, m.sites.valveB, m.sites.valveC]) {
+      g.beginPath(); g.moveTo(o.x + o.w / 2, o.y + o.h / 2); g.lineTo(v.x, v.y); g.stroke();
+    }
+    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(o.x + 10, o.y + 10, o.w, o.h);
+    g.fillStyle = '#b8c0cc'; g.fillRect(o.x, o.y, o.w, o.h);
+    for (let i = 0; i < 4; i++) {
+      g.fillStyle = '#e3e8ef'; g.beginPath(); g.arc(o.x + 22 + i * 35, o.y + 50, 15, 0, Math.PI * 2); g.fill();
+      g.fillStyle = f.oxygenRepaired ? `rgba(86,199,242,${0.5 + 0.5 * Math.sin(f.t * 2.5 + i)})` : `rgba(255,107,122,${0.4 + 0.5 * Math.abs(Math.sin(f.t * 5 + i))})`;
+      g.fillRect(o.x + 16 + i * 35, o.y + 47, 12, 5);
+    }
+    for (const v of [m.sites.valveA, m.sites.valveB, m.sites.valveC]) {
+      g.fillStyle = '#5f646e'; g.beginPath(); g.arc(v.x, v.y, 16, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#c9d0da'; g.beginPath(); g.arc(v.x, v.y, 10, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#F4CA65'; g.lineWidth = 3; g.beginPath(); g.moveTo(v.x - 7, v.y); g.lineTo(v.x + 7, v.y); g.stroke();
+    }
+    label(g, f.labels.oxygen, o.x + o.w / 2, o.y - 14, f.oxygenRepaired ? '#6CE0B2' : '#ff8fa0');
+  }
+  // gas leak clue: drifting puffs from the faulty valve
+  if (f.leak) {
+    for (let k = 0; k < 6; k++) {
+      const ph = (f.t * 0.8 + k / 6) % 1;
+      g.fillStyle = `rgba(220,235,255,${(1 - ph) * 0.35})`;
+      g.beginPath(); g.arc(f.leak.x + Math.sin(k * 2.3 + f.t) * 10 + ph * 26, f.leak.y - ph * 40, 4 + ph * 12, 0, Math.PI * 2); g.fill();
+    }
+  }
 
   // solar farm rows (blocks 2..4); segment B (south-east end of last row) may be broken
-  for (let i = 2; i < m.blocks.length; i++) {
+  for (let i = 2; i <= 4; i++) {
     const p = m.blocks[i];
     g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(p.x + 8, p.y + 10, p.w, p.h);
     const n = Math.floor(p.w / 30);
     for (let k = 0; k < n; k++) {
-      const broken = !f.solarRepaired && i === m.blocks.length - 1 && k >= n - 3;
+      const broken = !f.solarRepaired && i === 4 && k >= n - 3;
       g.fillStyle = broken ? '#3a2a2e' : '#1c4f7a';
       g.fillRect(p.x + k * 30 + 1, p.y, 28, p.h);
       g.fillStyle = broken ? `rgba(255,107,122,${0.35 + 0.35 * Math.sin(f.t * 8)})` : 'rgba(244,202,101,0.18)';
@@ -195,14 +238,19 @@ export function drawFrame(g: CanvasRenderingContext2D, vw: number, vh: number, m
   // sample site marker (future mission, scenery)
   label(g, f.labels.samples, m.sites.samples.x, m.sites.samples.y, '#8ea3bd');
 
-  // objective marker
-  if (f.target) {
-    const tr = f.target.r * (0.9 + 0.1 * Math.sin(f.t * 4));
-    g.lineWidth = f.targetNear ? 5 : 3;
-    g.strokeStyle = f.targetNear ? '#6CE0B2' : '#F4CA65';
-    g.beginPath(); g.arc(f.target.x, f.target.y, tr, 0, Math.PI * 2); g.stroke();
-    g.beginPath(); g.moveTo(f.target.x, f.target.y - tr - 18); g.lineTo(f.target.x - 8, f.target.y - tr - 32); g.lineTo(f.target.x + 8, f.target.y - tr - 32); g.closePath();
-    g.fillStyle = g.strokeStyle; g.fill();
+  // objective markers
+  for (const mk of f.targets) {
+    const tr = mk.r * (mk.state === 'done' ? 1 : 0.9 + 0.1 * Math.sin(f.t * 4));
+    g.lineWidth = mk.state === 'near' ? 5 : 3;
+    g.strokeStyle = mk.state === 'near' ? '#6CE0B2' : mk.state === 'done' ? 'rgba(160,170,185,0.7)' : '#F4CA65';
+    if (mk.state === 'done') g.setLineDash([6, 6]);
+    g.beginPath(); g.arc(mk.x, mk.y, tr, 0, Math.PI * 2); g.stroke();
+    g.setLineDash([]);
+    if (mk.state !== 'done') {
+      g.beginPath(); g.moveTo(mk.x, mk.y - tr - 18); g.lineTo(mk.x - 8, mk.y - tr - 32); g.lineTo(mk.x + 8, mk.y - tr - 32); g.closePath();
+      g.fillStyle = g.strokeStyle; g.fill();
+    }
+    if (mk.note) label(g, mk.note, mk.x, mk.y + mk.r + 16, mk.state === 'done' ? '#8ea3bd' : '#F4CA65');
   }
 
   // dust particles
@@ -227,6 +275,7 @@ export function drawFrame(g: CanvasRenderingContext2D, vw: number, vh: number, m
   for (const [wx, wy] of [[-14, -17], [8, -17], [-14, 13], [8, 13]]) g.fillRect(wx, wy, 12, 6);
   g.fillStyle = '#e3e8ef'; g.fillRect(-18, -13, 38, 26);
   g.fillStyle = '#1c4f7a'; g.fillRect(-14, -10, 20, 20); // solar deck
+  if (f.cargo) { g.fillStyle = '#d8b55a'; g.fillRect(-12, -8, 16, 16); g.strokeStyle = '#3a2e0a'; g.lineWidth = 1.5; g.strokeRect(-12, -8, 16, 16); }
   g.fillStyle = '#F4CA65'; g.fillRect(16, -8, 5, 5); g.fillRect(16, 3, 5, 5); // headlights
   g.fillStyle = r.battery > 25 ? '#6CE0B2' : '#ff6b7a'; g.beginPath(); g.arc(-12, 0, 2.5, 0, Math.PI * 2); g.fill();
   g.restore();
@@ -236,9 +285,11 @@ export function drawFrame(g: CanvasRenderingContext2D, vw: number, vh: number, m
   g.beginPath(); g.arc(r.x, r.y, ROVER.radius + 8, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * r.battery) / 100); g.stroke();
   g.restore();
 
-  // off-screen objective arrow
-  if (f.target) {
-    const sx = f.target.x - camX, sy = f.target.y - camY;
+  // off-screen objective arrow (nearest unfinished marker)
+  const goals = f.targets.filter((mk) => mk.state !== 'done');
+  const target = goals.sort((a, b) => Math.hypot(a.x - r.x, a.y - r.y) - Math.hypot(b.x - r.x, b.y - r.y))[0];
+  if (target) {
+    const sx = target.x - camX, sy = target.y - camY;
     if (sx < 0 || sy < 0 || sx > vw || sy > vh) {
       const ang = Math.atan2(sy - vh / 2, sx - vw / 2);
       const ax = vw / 2 + Math.cos(ang) * (vw / 2 - 36), ay = vh / 2 + Math.sin(ang) * (vh / 2 - 36);
@@ -246,7 +297,7 @@ export function drawFrame(g: CanvasRenderingContext2D, vw: number, vh: number, m
       g.fillStyle = '#F4CA65';
       g.beginPath(); g.moveTo(18, 0); g.lineTo(-10, -12); g.lineTo(-4, 0); g.lineTo(-10, 12); g.closePath(); g.fill();
       g.restore();
-      const dm = Math.round(Math.hypot(f.target.x - r.x, f.target.y - r.y) / 10);
+      const dm = Math.round(Math.hypot(target.x - r.x, target.y - r.y) / 10);
       g.font = '700 12px Inter, sans-serif'; g.fillStyle = '#F4CA65'; g.textAlign = 'center';
       g.fillText(`${dm} m`, ax - Math.cos(ang) * 30, ay - Math.sin(ang) * 30 + 4);
     }

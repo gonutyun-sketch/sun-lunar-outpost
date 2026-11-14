@@ -71,6 +71,11 @@ describe('thoughtful play wins, careless play fails', () => {
     expect(never.success).toBe(0);
   });
 
+  it('oxygen plant (Mission 2): skipping the repair is fatal, one failed attempt per mission is survivable', () => {
+    expect(simulate(MISSION, 1, sensiblePolicy(MISSION), 1, { skip: ['oxygenRepair'] }).failed).toBe(1);
+    expect(simulate(MISSION, 1, sensiblePolicy(MISSION), 1, { failures: 1 }).success).toBe(1);
+  });
+
   it('random clicking rarely succeeds and usually fails', () => {
     const r = simulate(MISSION, 3000, randomPolicy, 7);
     // eslint-disable-next-line no-console

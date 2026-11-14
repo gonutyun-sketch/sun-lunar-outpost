@@ -67,6 +67,12 @@ export interface ExpeditionConfig {
   fromShift: number;
   /** Solar output multiplier while the mission is not completed. */
   solarMult?: number;
+  /** Oxygen recycler output multiplier while the mission is not completed. */
+  oxygenMult?: number;
+  /** Extra oxygen lost per shift (leak) while the mission is not completed. */
+  oxygenLeak?: number;
+  /** Base oxygen lost per failed attempt (vented during the failed repair). */
+  failOxygenCost?: number;
   /** Base energy spent to recover the rover after each failed attempt. */
   failEnergyCost: number;
 }
@@ -156,6 +162,10 @@ export interface ShiftOutcome {
   solar: number;
   /** Solar array damaged (expedition pending) this shift. */
   solarDamaged: boolean;
+  /** Oxygen recycler damaged (expedition pending) this shift. */
+  oxygenDamaged: boolean;
+  /** Extra oxygen lost to a leak this shift. */
+  oxygenLeak: number;
   /** Battery capacity in force this shift. */
   capacity: number;
   /** Battery after solar charging (capped at capacity), before any demand. */
@@ -200,6 +210,8 @@ export interface GameState {
   expeditionsDone: string[];
   /** Failed rover attempts (each cost base energy). */
   expeditionFails: number;
+  /** Expedition results per shift, for shift reports and the debrief. */
+  expeditionLog: { shift: number; id: string; success: boolean; failures: number }[];
   status: MissionStatus;
   failReason?: FailReason;
   history: ShiftReport[];

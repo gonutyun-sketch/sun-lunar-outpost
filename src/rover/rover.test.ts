@@ -64,8 +64,8 @@ describe('rover physics', () => {
 
 describe('rover battery (fictional training values)', () => {
   it('charges in sunlight, drains in shadow, extra drain while moving, fast on the pad', () => {
-    const sun = { ...createRover(MAP), x: 300, y: 300 };
-    expect(inShadow(MAP, 300, 300)).toBe(false);
+    const sun = { ...createRover(MAP), x: 900, y: 200 };
+    expect(inShadow(MAP, 900, 200)).toBe(false);
     expect(stepRover(MAP, sun, NONE, 1).rover.battery).toBeCloseTo(81, 5);
     const sh = MAP.shadows[0];
     const dark = { ...createRover(MAP), x: sh.x + 100, y: sh.y - 200 };
@@ -114,3 +114,85 @@ function isTileRight(c: ReturnType<typeof createCircuit>, i: number) {
   const solution: Record<number, number> = { 0: S | E, 2: W | S, 8: N | E };
   return c.tiles[i].mask === solution[i];
 }
+
+import { createPressureGame, inBand, P, stepPressure, type PressureGame } from './pressure';
+
+/** Bot: per gauge, aim the valve at (band centre + leak/response) using short taps or long holds. */
+function regulate(style: 'careful' | 'reckless', maxT = 120) {
+  let g: PressureGame = createPressureGame();
+  let t = 0, sel = 0, tap = 0;
+  const dt = 1 / 60;
+  let maxWobble = 0;
+  while (!g.done && t < maxT) {
+    // pick the gauge furthest from its band
+    const err = g.gauges.map((x) => (inBand(x) ? 0 : Math.abs((x.band[0] + x.band[1]) / 2 - x.p)));
+    sel = err.indexOf(Math.max(...err));
+    const x = g.gauges[sel];
+    const mid = (x.band[0] + x.band[1]) / 2; // the player only sees the needle
+    let dir: -1 | 0 | 1 = Math.abs(mid - x.p) < 3 ? 0 : mid > x.p ? 1 : -1;
+    if (style === 'careful') { tap = (tap + dt) % 0.5; if (tap > 0.2) dir = 0; } // short taps
+    g = stepPressure(g, sel, dir, dt).game;
+    maxWobble = Math.max(maxWobble, ...g.gauges.map((q) => q.wobble));
+    t += dt;
+  }
+  return { g, t, maxWobble };
+}
+
+describe('pressure regulation minigame', () => {
+  it('starts unsolved with gauges outside their bands', () => {
+    const g = createPressureGame();
+    expect(g.done).toBe(false);
+    expect(g.gauges.some((x) => !inBand(x))).toBe(true);
+  });
+  it('doing nothing never succeeds (leaks pull pressure away)', () => {
+    let g = createPressureGame();
+    for (let i = 0; i < 60 * 30; i++) g = stepPressure(g, 0, 0, 1 / 60).game;
+    expect(g.done).toBe(false);
+  });
+  it('careful tapping solves it; reckless holding builds much more wobble', () => {
+    const careful = regulate('careful');
+    const reckless = regulate('reckless');
+    // eslint-disable-next-line no-console
+    console.log('[pressure] careful', careful.t.toFixed(1), 's wobble', careful.maxWobble.toFixed(2), 'vents', careful.g.vents,
+      '| reckless', reckless.t.toFixed(1), 's wobble', reckless.maxWobble.toFixed(2), 'vents', reckless.g.vents, 'done', reckless.g.done);
+    expect(careful.g.done).toBe(true);
+    expect(careful.t).toBeLessThan(45);
+    expect(reckless.maxWobble).toBeGreaterThan(careful.maxWobble + 5);
+    // rushing is never better: either it never stabilises or it is slower with vents
+    expect(!reckless.g.done || (reckless.t > careful.t && reckless.g.vents > 0)).toBe(true);
+  });
+  it('over-pressure vents the gauge and resets the hold timer', () => {
+    let g = createPressureGame();
+    g = { ...g, stable: 2, gauges: g.gauges.map((x, i) => (i === 0 ? { ...x, p: 94.9, valve: 100 } : x)) };
+    const r = stepPressure(g, 0, 1, 0.2);
+    expect(r.vented).toBe(0);
+    expect(r.game.gauges[0].p).toBe(P.ventTo);
+    expect(r.game.stable).toBe(0);
+    expect(r.game.vents).toBe(1);
+  });
+  it('needs a continuous hold of all three gauges in band', () => {
+    let g = createPressureGame();
+    g = { ...g, gauges: g.gauges.map((x) => ({ ...x, p: (x.band[0] + x.band[1]) / 2, valve: (x.band[0] + x.band[1]) / 2 + x.leak / P.response })) };
+    for (let i = 0; i < 60 * (P.hold + 0.2); i++) g = stepPressure(g, 0, 0, 1 / 60).game;
+    expect(g.done).toBe(true);
+  });
+});
+
+describe('mission 2 map routes', () => {
+  it('ridge blocks the direct way; shadowed west gap is shorter than the sunny east detour', () => {
+    const valve: [number, number] = [MAP.sites.valveA.x, MAP.sites.valveA.y];
+    const depot = { ...createRover(MAP), x: MAP.sites.depot.x, y: MAP.sites.depot.y };
+    const west = drive(depot, [[90, 600], [80, 420], valve]);
+    const east = drive(depot, [[700, 620], [710, 400], [420, 330], valve]);
+    // eslint-disable-next-line no-console
+    console.log('[route M2] west', west.t.toFixed(1), 's battery', west.r.battery.toFixed(1), '| east', east.t.toFixed(1), 's battery', east.r.battery.toFixed(1));
+    expect(Math.hypot(west.r.x - valve[0], west.r.y - valve[1])).toBeLessThan(40);
+    expect(Math.hypot(east.r.x - valve[0], east.r.y - valve[1])).toBeLessThan(40);
+    expect(west.t).toBeLessThan(east.t);
+    expect(west.r.battery).toBeLessThan(east.r.battery);
+    // straight north from the depot hits the ridge
+    let r = depot;
+    for (let i = 0; i < 240; i++) r = stepRover(MAP, r, hold({ up: true }), 1 / 60).rover;
+    expect(r.y).toBeGreaterThan(470);
+  });
+});

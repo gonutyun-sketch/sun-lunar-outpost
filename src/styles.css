@@ -513,3 +513,32 @@ html[lang='ko'] h1, html[lang='ko'] h2 { letter-spacing: 0.01em; }
 .advance .btn-rover + .btn-primary { padding: 10px 8px; }
 .expedition-alert { border-color: var(--yellow); }
 @media (max-width: 1100px) { .ex-top { grid-template-columns: 1fr; } .ex-bottom { grid-template-columns: 1fr; } }
+
+/* Mission 2: pressure panel, toast */
+.ex-toast { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 4; background: rgba(8,13,25,0.88); border: 1px solid var(--green); color: var(--green); font-weight: 700; padding: 8px 16px; border-radius: 8px; animation: pop 0.35s ease; }
+.ex-card.pressure { width: min(620px, 100%); }
+.pressure-wrap { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.gauges { display: flex; gap: 18px; justify-content: center; }
+.gauge { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); cursor: pointer; transition: border-color 0.15s, background 0.15s; position: relative; }
+.gauge.sel { border-color: var(--yellow); background: rgba(244,202,101,0.08); box-shadow: 0 0 16px rgba(244,202,101,0.2); }
+.gauge.ok .g-val { color: var(--green); }
+.g-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--muted); }
+.g-tube { fill: #0d1626; stroke: rgba(86,199,242,0.3); stroke-width: 2; }
+.g-band { fill: rgba(108,224,178,0.28); }
+.g-fill { fill: rgba(86,199,242,0.35); }
+.gauge.ok .g-fill { fill: rgba(108,224,178,0.45); }
+.g-needle { stroke: #fff; stroke-width: 3; }
+.g-valve { fill: var(--yellow); }
+.g-limit { stroke: var(--red); stroke-width: 2; stroke-dasharray: 3 3; }
+.g-val { font-family: var(--display); font-size: 16px; }
+.g-btns { display: flex; gap: 6px; }
+.g-btn { width: 34px; height: 28px; border-radius: 6px; border: 1px solid var(--line-strong); background: rgba(86,199,242,0.08); color: var(--text); font-size: 12px; user-select: none; touch-action: none; }
+.g-btn:active { background: rgba(244,202,101,0.3); border-color: var(--yellow); }
+.gauge.vent { animation: radframe 0.4s ease 2; border-color: var(--red); }
+.g-vent { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); color: var(--red); font-weight: 800; font-family: var(--display); font-size: 13px; background: rgba(8,13,25,0.85); padding: 3px 6px; border-radius: 4px; }
+.g-hold { width: min(420px, 100%); display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.g-hold .bar { flex: 1; height: 10px; }
+.g-hold .bar > i { background: var(--green); transition: width 0.1s linear; }
+.hl.fail { background: rgba(255,107,122,0.15); color: #ffb3bd; }
+
+.advance .btn-rover { padding: 6px 8px; font-size: 12px; animation-duration: 2.4s; }

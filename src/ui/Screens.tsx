@@ -360,6 +360,7 @@ export function Results({ state, onRestart, onMenu }: { state: GameState; onRest
             ))}
             {!state.history.some((h) => h.built) && <li className="muted">{t('results.noUpgrades')}</li>}
             {state.expeditionsDone.includes('solarRepair') && <li><span className="when">🚙</span> <b>{t('ex.doneTag')}</b></li>}
+            {state.expeditionsDone.includes('oxygenRepair') && <li><span className="when">🚙</span> <b>{t('ex.o2.doneTag')}</b></li>}
           </ul>
         </div>
       </section>
