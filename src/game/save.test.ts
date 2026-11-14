@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MISSION } from './config';
+import { missionFor } from './difficulty';
 import { legalMoves, play, rng, sensiblePolicy, type Move } from './analysis';
 import { activeExpedition, advanceShift, applyExpedition, computeScore, createInitialState, toggleFacility } from './engine';
 import { SAVE_KEY, SAVE_VERSION, clearSave, hasProgress, isValidState, loadGame, saveGame, type KV } from './save';
@@ -141,6 +142,50 @@ describe('save & continue', () => {
     expect(saveGame(null, createInitialState(MISSION))).toBe(false);
     const full: KV = { getItem: () => null, setItem: () => { throw new Error('quota'); }, removeItem: () => {} };
     expect(saveGame(full, createInitialState(MISSION))).toBe(false);
+  });
+
+  it.each(['easy', 'normal', 'hard'] as const)('%s: the difficulty is saved and restored, also mid-expedition', (d) => {
+    const cfg = missionFor(d);
+    const kv = memory();
+    let s = createInitialState(cfg);
+    for (let i = 0; i < 3; i++) {
+      const m = legalMoves(s, cfg).filter((x) => play(s, cfg, x))[0];
+      s = advanceShift({ ...s, facilities: m.facilities, build: m.build, choice: m.choice }, cfg);
+    }
+    const back = roundTrip(kv, s);
+    expect(back.difficulty).toBe(d);
+    expect(back).toEqual(s);
+    const mid = roundTrip(kv, s, 'solarRepair'); // reload while the rover is out
+    expect(mid.difficulty).toBe(d);
+    // the result is applied once with this difficulty's cost, a repeat is ignored
+    const after = applyExpedition(mid, cfg, 'solarRepair', { success: true, failures: 1 });
+    expect(after.resources.energy).toBe(mid.resources.energy - cfg.expeditions[0].failEnergyCost);
+    expect(applyExpedition(after, cfg, 'solarRepair', { success: true, failures: 1 })).toBe(after);
+  });
+
+  it('a version-1 save (before difficulties) is migrated to Hard — the same rules — and kept', () => {
+    const kv = memory();
+    const { difficulty: _d, ...old } = playTo(4);
+    kv.setItem(SAVE_KEY, JSON.stringify({ v: 1, savedAt: 5, state: old, exploring: null }));
+    const r = loadGame(kv, MISSION);
+    if (r.kind !== 'ok') throw new Error(r.kind);
+    expect(r.migratedFrom).toBe(1);
+    expect(r.save.state.difficulty).toBe('hard');
+    expect(r.save.state.shift).toBe(4);
+    expect(r.save.state.history).toHaveLength(3);
+    // written back as v2, so the next load needs no migration
+    expect(JSON.parse(kv.getItem(SAVE_KEY)!).v).toBe(SAVE_VERSION);
+    const again = loadGame(kv, MISSION);
+    expect(again.kind === 'ok' && again.migratedFrom).toBe(undefined);
+  });
+
+  it('a v2 save with a missing or unknown difficulty is rejected safely', () => {
+    const good = playTo(3);
+    for (const state of [{ ...good, difficulty: undefined }, { ...good, difficulty: 'extreme' }]) {
+      const kv = memory();
+      kv.setItem(SAVE_KEY, JSON.stringify({ v: SAVE_VERSION, state }));
+      expect(loadGame(kv, MISSION)).toEqual({ kind: 'invalid', reason: 'shape' });
+    }
   });
 
   it('stores no personal data — only the versioned game state', () => {

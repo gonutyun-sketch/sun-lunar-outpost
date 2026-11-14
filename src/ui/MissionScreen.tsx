@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MISSION } from '../game/config';
+import { coachByDefault, coachTips } from '../game/coach';
+import { difficultyOf, missionFor, type DifficultyId } from '../game/difficulty';
 import {
   activeExpeditions,
   advanceShift,
@@ -29,6 +30,7 @@ import {
   type EventChoice,
   type FacilityId,
   type GameState,
+  type MissionConfig,
   type MissionEvent,
   type Resources,
   type ShiftReport,
@@ -86,6 +88,21 @@ function Delta({ v }: { v: number }) {
 
 const signed = (v: number) => (v >= 0 ? `+${v}` : `${v}`);
 
+/** Player's choice to show or hide coach tips, remembered per difficulty (null = difficulty default). */
+const coachKey = (d: DifficultyId) => `sun-coach-${d}`;
+function readCoachPref(d: DifficultyId): boolean | null {
+  try { const v = localStorage.getItem(coachKey(d)); return v === 'on' ? true : v === 'off' ? false : null; } catch { return null; }
+}
+function writeCoachPref(d: DifficultyId, on: boolean) {
+  try { localStorage.setItem(coachKey(d), on ? 'on' : 'off'); } catch { /* storage unavailable */ }
+}
+
+/** Small difficulty label shown in the top bar and on the results screen. */
+export function DifficultyBadge({ id }: { id: DifficultyId }) {
+  const { t } = useI18n();
+  return <span className={`diff-chip diff-${id}`} title={t('diff.chipTip')}><i aria-hidden />{t(`diff.${id}.name` as Key)}</span>;
+}
+
 function Stat({ name, short, tip, k, value, next, warnAt, critAt, max = 100 }: {
   name: string; short: string; tip: string; k: keyof Resources; value: number; next: number; warnAt: number; critAt: number; max?: number;
 }) {
@@ -108,11 +125,11 @@ function Stat({ name, short, tip, k, value, next, warnAt, critAt, max = 100 }: {
 }
 
 /** Numbers used inside event choice texts. */
-export function choiceParams(ev: MissionEvent, c: EventChoice): Params {
+export function choiceParams(ev: MissionEvent, c: EventChoice, cfg: MissionConfig): Params {
   return {
     energy: c.energyCost ?? 0,
     pct: Math.round((c.oxygenProdMult ?? 1) * 100),
-    shelter: MISSION.facilities.shelter.energyCost,
+    shelter: cfg.facilities.shelter.energyCost,
     dmg: c.radiationDamage ?? ev.radiation?.damage ?? 0,
     health: c.health ?? 0,
     mult: c.solarMult ?? 1,
@@ -121,24 +138,24 @@ export function choiceParams(ev: MissionEvent, c: EventChoice): Params {
 }
 
 /** Localised explanation of a finished shift, built from the engine's outcome numbers. */
-export function explainReport(r: ShiftReport, t: T): string[] {
+export function explainReport(r: ShiftReport, t: T, cfg: MissionConfig): string[] {
   const out: string[] = [];
   const wasted = r.before.energy + r.solar - r.available;
   const pct = Math.round(r.illumination * 100);
   out.push(wasted > 0 ? t('exp.solarWasted', { solar: r.solar, pct, wasted }) : t('exp.solar', { solar: r.solar, pct }));
   out.push(t('exp.used', { n: r.habitatPowerFailure ? r.available : r.demand }));
   if (r.habitatPowerFailure) out.push(t('exp.habitatFail'));
-  if (r.solarDamaged) out.push(t('exp.solarDamaged', { pct: Math.round((MISSION.expeditions[0]?.solarMult ?? 1) * 100) }));
-  if (r.oxygenDamaged || r.oxygenLeak) out.push(t('exp.oxygenDamaged', { pct: Math.round((MISSION.expeditions.find((e) => e.id === 'oxygenRepair')?.oxygenMult ?? 1) * 100), leak: r.oxygenLeak }));
-  const ev = r.eventId ? MISSION.events.find((e) => e.id === r.eventId) : undefined;
+  if (r.solarDamaged) out.push(t('exp.solarDamaged', { pct: Math.round((cfg.expeditions[0]?.solarMult ?? 1) * 100) }));
+  if (r.oxygenDamaged || r.oxygenLeak) out.push(t('exp.oxygenDamaged', { pct: Math.round((cfg.expeditions.find((e) => e.id === 'oxygenRepair')?.oxygenMult ?? 1) * 100), leak: r.oxygenLeak }));
+  const ev = r.eventId ? cfg.events.find((e) => e.id === r.eventId) : undefined;
   const choice = ev?.choices.find((c) => c.id === r.choiceId);
   if (ev && choice) out.push(t('exp.event', { title: t(`ev.${ev.id}.title` as Key), choice: t(`ev.${ev.id}.${choice.id}` as Key) }));
   out.push(r.oxygenProduced > 0
-    ? t('exp.o2Prod', { prod: r.oxygenProduced, use: MISSION.crew.oxygenUse })
-    : t('exp.o2Off', { use: MISSION.crew.oxygenUse }));
+    ? t('exp.o2Prod', { prod: r.oxygenProduced, use: cfg.crew.oxygenUse })
+    : t('exp.o2Off', { use: cfg.crew.oxygenUse }));
   out.push(r.foodProduced > 0
-    ? t('exp.foodOn', { prod: r.foodProduced, use: MISSION.crew.foodUse })
-    : t('exp.foodOff', { use: MISSION.crew.foodUse }));
+    ? t('exp.foodOn', { prod: r.foodProduced, use: cfg.crew.foodUse })
+    : t('exp.foodOff', { use: cfg.crew.foodUse }));
   if (choice?.food) out.push(t('exp.eventFood', { n: choice.food }));
   if (choice?.health) out.push(t('exp.eventHealth', { n: choice.health }));
   if (r.radiation === 'protected') out.push(t('exp.radSafe'));
@@ -151,6 +168,7 @@ export function explainReport(r: ShiftReport, t: T): string[] {
 
 function EventCard({ state, ev, onChoose }: { state: GameState; ev: MissionEvent; onChoose: (id: string) => void }) {
   const { t } = useI18n();
+  const cfg = missionFor(state.difficulty);
   const chosen = state.choice;
   return (
     <div className={`event-card ${ev.radiation ? 'radiation' : ''} ${chosen ? 'decided' : ''}`} role="group" aria-label={t(`ev.${ev.id}.title` as Key)}>
@@ -165,7 +183,7 @@ function EventCard({ state, ev, onChoose }: { state: GameState; ev: MissionEvent
           <button key={c.id} type="button" className={`choice ${chosen === c.id ? 'picked' : ''}`} aria-pressed={chosen === c.id}
             disabled={state.status !== 'playing'} onClick={() => onChoose(c.id)}>
             <b>{t(`ev.${ev.id}.${c.id}` as Key)}</b>
-            <small>{t(`ev.${ev.id}.${c.id}.fx` as Key, choiceParams(ev, c))}</small>
+            <small>{t(`ev.${ev.id}.${c.id}.fx` as Key, choiceParams(ev, c, cfg))}</small>
           </button>
         ))}
       </div>
@@ -175,11 +193,12 @@ function EventCard({ state, ev, onChoose }: { state: GameState; ev: MissionEvent
 
 function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState: (s: GameState) => void; onFocus: (k: string | null) => void }) {
   const { t } = useI18n();
-  const U = MISSION.upgrades;
+  const cfg = missionFor(state.difficulty);
+  const U = cfg.upgrades;
   const eff: Record<UpgradeId, string> = {
-    solar: t('upg.solar.eff', { a: MISSION.solar.basePeakOutput, b: MISSION.solar.basePeakOutput + (U.solar.bonus ?? 0) }),
-    oxygen: t('upg.oxygen.eff', { c1: MISSION.facilities.oxygen.energyCost, c2: U.oxygen.energyCostAfter ?? 0, p1: MISSION.facilities.oxygen.produces, p2: U.oxygen.producesAfter ?? 0 }),
-    battery: t('upg.battery.eff', { a: MISSION.capacity.energy, b: MISSION.capacity.energy + (U.battery.bonus ?? 0) }),
+    solar: t('upg.solar.eff', { a: cfg.solar.basePeakOutput, b: cfg.solar.basePeakOutput + (U.solar.bonus ?? 0) }),
+    oxygen: t('upg.oxygen.eff', { c1: cfg.facilities.oxygen.energyCost, c2: U.oxygen.energyCostAfter ?? 0, p1: cfg.facilities.oxygen.produces, p2: U.oxygen.producesAfter ?? 0 }),
+    battery: t('upg.battery.eff', { a: cfg.capacity.energy, b: cfg.capacity.energy + (U.battery.bonus ?? 0) }),
   };
   return (
     <div className="upgrades">
@@ -187,10 +206,10 @@ function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState
       {UPGRADE_IDS.map((id) => {
         const installed = state.upgrades[id];
         const building = state.build === id;
-        const can = canBuild(state, MISSION, id);
+        const can = canBuild(state, cfg, id);
         const label = installed ? t('upg.installed')
           : building ? t('upg.building')
-          : state.shift < MISSION.upgradeUnlockShift ? t('upg.locked', { n: MISSION.upgradeUnlockShift })
+          : state.shift < cfg.upgradeUnlockShift ? t('upg.locked', { n: cfg.upgradeUnlockShift })
           : !can ? t('upg.tooLate') : t('upg.build');
         const tip = installed ? t('upg.tipInstalled') : building ? t('upg.tipCancel') : t('upg.tipBuild', { n: U[id].energyCost });
         return (
@@ -202,7 +221,7 @@ function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState
             </div>
             <button type="button" className="upg-btn" disabled={installed || (!can && !building)} title={tip} aria-pressed={building}
               onFocus={() => onFocus(`upg.${id}`)} onBlur={() => onFocus(null)}
-              onClick={() => setState(toggleBuild(state, MISSION, id))}>
+              onClick={() => setState(toggleBuild(state, cfg, id))}>
               <span>{label}</span>
               {!installed && <em>{t('upg.cost', { n: U[id].energyCost })}</em>}
             </button>
@@ -219,27 +238,30 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
   const [focus, setFocus] = useState<string | null>(null);
   const [roverMenu, setRoverMenu] = useState(false);
   const { warning, add: warn } = useWarningQueue();
+  const cfg = missionFor(state.difficulty);
+  const diff = difficultyOf(state.difficulty);
+  const [coachPref, setCoachPref] = useState<boolean | null>(() => readCoachPref(state.difficulty));
 
-  const outcome = useMemo(() => projectCurrentShift(state, MISSION), [state]);
-  const warnings = useMemo(() => getWarnings(state, MISSION, outcome), [state, outcome]);
+  const outcome = useMemo(() => projectCurrentShift(state, cfg), [state]);
+  const warnings = useMemo(() => getWarnings(state, cfg, outcome), [state, outcome]);
   const allowed = canAdvance(outcome);
   const r = state.resources;
   const ended = state.status !== 'playing';
-  const event = getEvent(MISSION, state.shift);
-  const forecast = getForecast(MISSION, state.shift);
-  const chapter = getChapter(MISSION, state.shift);
-  const chapterStart = MISSION.chapters.find((c) => c.from === state.shift);
-  const capacity = batteryCapacity(MISSION, state.upgrades);
+  const event = getEvent(cfg, state.shift);
+  const forecast = getForecast(cfg, state.shift);
+  const chapter = getChapter(cfg, state.shift);
+  const chapterStart = cfg.chapters.find((c) => c.from === state.shift);
+  const capacity = batteryCapacity(cfg, state.upgrades);
   const nextUpgrades = outcome.built ? { ...state.upgrades, [outcome.built]: true } : state.upgrades;
-  const nextSolar = state.shift < MISSION.totalShifts ? solarGeneration(MISSION, state.shift + 1, nextUpgrades) : null;
+  const nextSolar = state.shift < cfg.totalShifts ? solarGeneration(cfg, state.shift + 1, nextUpgrades) : null;
   const lastBuilt = state.history[state.history.length - 1]?.built ?? null;
-  const expeditions = activeExpeditions(state, MISSION);
-  const damagePct = Math.round(solarDamageMult(state, MISSION) * 100);
-  const o2DamagePct = Math.round(oxygenDamageMult(state, MISSION) * 100);
-  const leak = oxygenLeak(state, MISSION);
+  const expeditions = activeExpeditions(state, cfg);
+  const damagePct = Math.round(solarDamageMult(state, cfg) * 100);
+  const o2DamagePct = Math.round(oxygenDamageMult(state, cfg) * 100);
+  const leak = oxygenLeak(state, cfg);
   const powerDeficit = outcome.habitatPowerFailure || outcome.optionalDeficit > 0;
-  const solarFaultStarted = outcome.solarDamaged && MISSION.expeditions.some(e => e.id === 'solarRepair' && e.fromShift === state.shift);
-  const oxygenFaultStarted = outcome.oxygenDamaged && MISSION.expeditions.some(e => e.id === 'oxygenRepair' && e.fromShift === state.shift);
+  const solarFaultStarted = outcome.solarDamaged && cfg.expeditions.some(e => e.id === 'solarRepair' && e.fromShift === state.shift);
+  const oxygenFaultStarted = outcome.oxygenDamaged && cfg.expeditions.some(e => e.id === 'oxygenRepair' && e.fromShift === state.shift);
   useEffect(() => {
     if (ended) return;
     const next: MissionWarning[] = [];
@@ -265,13 +287,19 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
     solarFault: outcome.solarDamaged,
     oxygenFault: outcome.oxygenDamaged || (event?.id === 'o2fault' && state.choice !== 'repair'),
     pumpFault: event?.id === 'pump' && state.choice !== 'replace',
-    powerAlert: outcome.habitatPowerFailure || outcome.optionalDeficit > 0 || outcome.after.energy < MISSION.habitat.energyCost,
+    powerAlert: outcome.habitatPowerFailure || outcome.optionalDeficit > 0 || outcome.after.energy < cfg.habitat.energyCost,
     habitatOffline: outcome.habitatPowerFailure,
     battery: Math.min(1, r.energy / capacity),
     upgrades: state.upgrades,
     building: state.build,
     fresh: lastBuilt,
   }), [outcome, event, ended, state.choice, state.upgrades, state.build, lastBuilt, r.energy, capacity]);
+  const coachOpen = !ended && (coachPref ?? coachByDefault(diff.help.coach, state.shift));
+  const tips = useMemo(() => (coachOpen ? coachTips(state, cfg, outcome) : []), [coachOpen, state, cfg, outcome]);
+  const setCoach = (on: boolean) => { setCoachPref(on); writeCoachPref(state.difficulty, on); };
+  /** Easy mode explains warnings in friendlier words; Normal/Hard keep the situation + numbers. */
+  const warnText = (code: string, params?: Params) =>
+    t((diff.help.tone === 'friendly' ? `warn.${code}.easy` : `warn.${code}`) as Key, params);
   const facFocus = focus && FACILITY_IDS.includes(focus as FacilityId) ? (focus as FacilityId) : null;
   // Science briefing: hovered facility/upgrade > current emergency > shift card.
   const eduKey = focus ? `edu.${focus}` : event ? `edu.ev.${event.id}` : `edu.${state.shift}`;
@@ -280,7 +308,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
     id === 'event' ? t('power.event') : id === 'build' && state.build ? t('power.build', { name: t(`upg.${state.build}` as Key) }) : facName(id);
 
   const onAdvance = () => {
-    const next = advanceShift(state, MISSION);
+    const next = advanceShift(state, cfg);
     if (next === state) return;
     setState(next);
     setReport(next.history[next.history.length - 1]);
@@ -294,12 +322,13 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
       <header className="topbar panel">
         <div className="brand">
           <h1>SUN-01</h1>
-          <span className="shift">{t('mission.shift', { n: state.shift, total: MISSION.totalShifts })}</span>
+          <span className="shift">{t('mission.shift', { n: state.shift, total: cfg.totalShifts })}</span>
+          <DifficultyBadge id={state.difficulty} />
           <span className="chapter-tag" title={t(`chapter.${chapter}.goal` as Key)}>{t('chapter.label', { n: chapter })} · {t(`chapter.${chapter}.title` as Key)}</span>
           <div className="shift-pips" aria-hidden>
-            {MISSION.shifts.map((s) => (
+            {cfg.shifts.map((s) => (
               <span key={s.shift}
-                className={`${s.shift < state.shift || (ended && s.shift === state.shift) ? 'done' : s.shift === state.shift ? 'now' : ''} ${MISSION.chapters.some((c) => c.from === s.shift && s.shift > 1) ? 'ch' : ''} ${getEvent(MISSION, s.shift) ? 'ev' : ''}`} />
+                className={`${s.shift < state.shift || (ended && s.shift === state.shift) ? 'done' : s.shift === state.shift ? 'now' : ''} ${cfg.chapters.some((c) => c.from === s.shift && s.shift > 1) ? 'ch' : ''} ${getEvent(cfg, s.shift) ? 'ev' : ''}`} />
             ))}
           </div>
         </div>
@@ -312,12 +341,12 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
             <div className="stat-head">
               <span className="name"><Icon k="research" /><span className="long">{t('res.research')}</span><span className="short">{t('res.short.research')}</span></span>
               <span>
-                <span className="val">{r.research}/{MISSION.capacity.research}</span>
+                <span className="val">{r.research}/{cfg.capacity.research}</span>
                 <Delta v={outcome.after.research - r.research} />
               </span>
             </div>
             <div className="research-dots" aria-hidden>
-              {Array.from({ length: MISSION.capacity.research }, (_, i) => (
+              {Array.from({ length: cfg.capacity.research }, (_, i) => (
                 <span key={i} className={i < r.research ? 'on' : ''} />
               ))}
             </div>
@@ -325,6 +354,11 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
         </div>
         <div className="topbar-actions">
           <LangToggle className="compact" />
+          {!ended && (
+            <button className={`icon-btn coach-btn ${coachOpen ? 'on' : ''}`} onClick={() => setCoach(!coachOpen)} aria-pressed={coachOpen} title={t('coach.toggleTip')}>
+              {t(coachOpen ? 'coach.hide' : 'coach.show')}
+            </button>
+          )}
           <button className="icon-btn" onClick={onToggleFx} aria-pressed={fx} title={t('mission.fxTip')}>
             {t('mission.fx', { state: t(fx ? 'mission.fxOn' : 'mission.fxOff') })}
           </button>
@@ -364,7 +398,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
               <span className="k">{t('chip.solar')}</span>
               <strong style={{ color: '#F4CA65' }}>+{outcome.solar}</strong> {t('chip.energy')} · {t('chip.sunlit', { pct: Math.round(outcome.illumination * 100) })}
               <div className="sun-calc">
-                <span className="badge-data measured" title={t('chip.nasaTip')}>{t('chip.nasaBadge')}</span> {t('chip.sunVisible', { pct: Math.round(MISSION.site.averageSunlitFraction * 100) })}
+                <span className="badge-data measured" title={t('chip.nasaTip')}>{t('chip.nasaBadge')}</span> {t('chip.sunVisible', { pct: Math.round(cfg.site.averageSunlitFraction * 100) })}
                 {' × '}
                 <span className="badge-data game" title={t('chip.scenarioTip')}>{t('chip.scenarioBadge')}</span> ×{outcome.scenarioModifier.toFixed(2)}
               </div>
@@ -378,25 +412,37 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
 
         <aside className="controls panel" aria-label={t('controls.aria')}>
           <h2>{t('controls.title')}</h2>
+          {tips.length > 0 && (
+            <div className="coach" role="note" aria-label={t('coach.title')}>
+              <div className="coach-head">
+                <span className="coach-badge" aria-hidden>?</span>
+                <b>{t('coach.title')}</b>
+                <button type="button" className="coach-close" onClick={() => setCoach(false)} aria-label={t('coach.hide')}>✕</button>
+              </div>
+              <ul>
+                {tips.map((k) => <li key={k}>{t(`coach.${k}` as Key, { goal: cfg.capacity.research, o2: cfg.crew.oxygenUse, food: cfg.crew.foodUse, habitat: cfg.habitat.energyCost })}</li>)}
+              </ul>
+            </div>
+          )}
           {event && !ended && (
-            <EventCard state={state} ev={event} onChoose={(id) => setState(chooseOption(state, MISSION, id))} />
+            <EventCard state={state} ev={event} onChoose={(id) => setState(chooseOption(state, cfg, id))} />
           )}
 
           <div className="fac on locked slim">
             <div className="title"><span className="led" />{facName('habitat')}<span className="state on">{t('controls.alwaysOn')}</span></div>
-            <div className="meta"><span className="cost">{t('controls.cost', { n: MISSION.habitat.energyCost })}</span><span>{t('controls.habitatDesc')}</span></div>
+            <div className="meta"><span className="cost">{t('controls.cost', { n: cfg.habitat.energyCost })}</span><span>{t('controls.habitatDesc')}</span></div>
           </div>
 
           {FACILITY_IDS.map((id) => {
             const on = state.facilities[id];
             const lockedByEvent = !!event && (event.choices.find((c) => c.id === state.choice)?.disable ?? []).includes(id);
-            const forcedOn = isForcedOn(state, MISSION, id);
-            const available = isFacilityAvailable(state, MISSION, id);
+            const forcedOn = isForcedOn(state, cfg, id);
+            const available = isFacilityAvailable(state, cfg, id);
             const gain =
-              id === 'oxygen' ? t('gain.oxygen', { n: oxygenOutput(MISSION, state.upgrades) })
-              : id === 'greenhouse' ? t('gain.food', { n: MISSION.facilities.greenhouse.produces })
+              id === 'oxygen' ? t('gain.oxygen', { n: oxygenOutput(cfg, state.upgrades) })
+              : id === 'greenhouse' ? t('gain.food', { n: cfg.facilities.greenhouse.produces })
               : id === 'shelter' ? t(event?.radiation ? 'gain.shelterNow' : 'gain.shelter')
-              : t(r.research < MISSION.capacity.research ? 'gain.lab' : 'gain.labDone');
+              : t(r.research < cfg.capacity.research ? 'gain.lab' : 'gain.labDone');
             const name = facName(id);
             const stateLabel = lockedByEvent ? t('controls.locked') : t(on ? 'controls.online' : 'controls.standby');
             return (
@@ -410,9 +456,9 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
                   aria-label={t('switch.aria', { name, state: t(on ? 'switch.on' : 'switch.off') })}
                   title={lockedByEvent || forcedOn ? t('switch.tipLocked') : !on && !available ? t('switch.tipDone') : t(on ? 'switch.tipOn' : 'switch.tipOff', { name })}
                   disabled={ended || lockedByEvent || forcedOn || (!on && !available)}
-                  onClick={() => { setFocus(id); setState(toggleFacility(state, MISSION, id)); }}
+                  onClick={() => { setFocus(id); setState(toggleFacility(state, cfg, id)); }}
                 />
-                <div className="meta"><span className="cost">{t('controls.cost', { n: facilityCost(MISSION, id, state.upgrades) })}</span><span className="gain">{gain}</span></div>
+                <div className="meta"><span className="cost">{t('controls.cost', { n: facilityCost(cfg, id, state.upgrades) })}</span><span className="gain">{gain}</span></div>
               </div>
             );
           })}
@@ -428,7 +474,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
           {warnings.length > 0 && (
             <div className="alerts" role="alert">
               {warnings.map((w, i) => (
-                <div key={i} className={`alert ${w.level}`}>{w.code ? t(`warn.${w.code}` as Key, w.params) : w.text}</div>
+                <div key={i} className={`alert ${w.level}`}>{w.code ? warnText(w.code, w.params) : w.text}</div>
               ))}
             </div>
           )}
@@ -452,11 +498,11 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
         <section className="log panel" aria-label={t('log.aria')}>
           <h2>{t('log.title')}</h2>
           {state.history.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>{t('log.welcome', { shifts: MISSION.totalShifts })}</p>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>{t('log.welcome', { shifts: cfg.totalShifts })}</p>
           ) : (
             <ol>
               {[...state.history].reverse().map((h) => {
-                const ev = h.eventId ? MISSION.events.find((e) => e.id === h.eventId) : undefined;
+                const ev = h.eventId ? cfg.events.find((e) => e.id === h.eventId) : undefined;
                 return (
                   <li key={h.shift}>
                     <b>{t('log.shift', { n: h.shift })}</b>
@@ -526,16 +572,17 @@ function ShiftReportModal({ report, state, onClose, onResults }: {
   report: ShiftReport; state: GameState; onClose: () => void; onResults: () => void;
 }) {
   const { t } = useI18n();
+  const cfg = missionFor(state.difficulty);
   const keys: (keyof Resources)[] = ['energy', 'oxygen', 'food', 'health', 'research'];
   const ended = state.status !== 'playing';
-  const chapterDone = state.status !== 'failed' ? MISSION.chapters.find((c) => c.to === report.shift) : undefined;
+  const chapterDone = state.status !== 'failed' ? cfg.chapters.find((c) => c.to === report.shift) : undefined;
   const highlights: { cls: string; text: string }[] = [];
   if (report.built) highlights.push({ cls: 'up', text: t('report.upgrade', { name: t(`upg.${report.built}` as Key) }) });
-  if (report.researchGained) highlights.push({ cls: 'sci', text: t('report.milestone', { n: report.after.research, max: MISSION.capacity.research }) });
+  if (report.researchGained) highlights.push({ cls: 'sci', text: t('report.milestone', { n: report.after.research, max: cfg.capacity.research }) });
   if (chapterDone) highlights.push({ cls: 'ch', text: t('report.chapterDone', { n: chapterDone.id, title: t(`chapter.${chapterDone.id}.title` as Key) }) });
   if (report.radiation === 'protected') highlights.push({ cls: 'safe', text: t('exp.radSafe') });
   for (const x of state.expeditionLog.filter((e) => e.shift === report.shift)) {
-    const exCfg = MISSION.expeditions.find((e) => e.id === x.id);
+    const exCfg = cfg.expeditions.find((e) => e.id === x.id);
     const name = t(`ex.short.${x.id}` as Key);
     if (x.success) highlights.push({ cls: 'up', text: t('report.exOk', { name }) });
     if (x.failures) highlights.push({ cls: 'fail', text: t('report.exFail', { name, n: x.failures, e: x.failures * (exCfg?.failEnergyCost ?? 0), o2: x.failures * (exCfg?.failOxygenCost ?? 0) }) });
@@ -559,7 +606,7 @@ function ShiftReportModal({ report, state, onClose, onResults }: {
             </div>
           ))}
         </div>
-        <ul>{explainReport(report, t).map((e, i) => <li key={i}>{e}</li>)}</ul>
+        <ul>{explainReport(report, t, cfg).map((e, i) => <li key={i}>{e}</li>)}</ul>
         <div className="actions">
           {ended ? (
             <button className="btn btn-primary" onClick={onResults} autoFocus>{t('report.results')}</button>

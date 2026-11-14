@@ -2,7 +2,7 @@
 
 ## Tools
 - **Claude Code (Anthropic, Claude Opus 5.5)** — development assistant.
-- **Codex (OpenAI)** — pixel art and interface implementation and browser verification.
+- **Codex (OpenAI)** — pixel art and interface implementation and browser verification (merged via PR #1, commits by "Codex").
 
 ## Scope of AI assistance
 - Project scaffolding (React + TypeScript + Vite configuration).
@@ -14,6 +14,7 @@
 - Gameplay screenshots in docs/screenshots/ are captures of the actual game (not generated images).
 - Korean/English localisation system and the Korean translation of all UI and educational text (to be reviewed by Korean-speaking team members).
 - Gameplay v2 design proposal and implementation (upgrades, emergencies, chapters), balance bots and the exact best-play search; the numbers were tuned by simulation and should be reviewed by the team after human play-testing.
+- Difficulty modes (Easy/Normal/Hard) on one engine with per-mode fictional values, chosen by balance simulation; save v2 with v1 migration; beginner coach tips and friendlier warnings; rover/puzzle hints per mode; the tabbed Science & Credits learning pages (texts checked against NASA Moon facts / LRO pages; no new measured values); a fix for a stuck-feeling power deficit; tests and QA scripts (Claude Code).
 - Save & continue system (localStorage, validation, checkpoint) and rover visual/feedback polish (procedural Canvas art, effects, camera), with tests and QA scripts.
 - Cross-platform pass: responsive CSS, touch joystick/action controls, canvas sizing, QA scripts.
 - Rover Mission 3 (science survey, deep-shadow training zone, drilling) and the rover launcher menu.
@@ -23,7 +24,11 @@
 
 ## Human contributions
 - Game concept, Game Design Document, rules, numbers and balancing targets (Team SUN).
+- Educational goal, gameplay and design direction, play-testing and feedback (e.g. "the game is too hard"), difficulty requirements.
 - Review and approval of all AI output.
+
+## How to record future contributions
+Add the tool (or person), what it did and the commits/PR to the lists above, and to the "Who did what" section in the game (`team.role.*` keys in src/i18n/en.learn.ts and ko.learn.ts).
 
 ## Data sources
 - Gameplay numbers (costs, consumption, radiation events, per-shift scenario modifiers) come from the team's GDD and are fictional training values.

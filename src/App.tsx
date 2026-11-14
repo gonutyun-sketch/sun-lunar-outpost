@@ -1,15 +1,16 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react';
 import { MISSION } from './game/config';
+import { DEFAULT_DIFFICULTY, missionFor, type DifficultyId } from './game/difficulty';
 import { applyExpedition, createInitialState } from './game/engine';
-import { browserStorage, clearSave, hasProgress, loadGame, saveGame } from './game/save';
+import { browserStorage, clearSave, hasProgress, loadGame, saveGame, SAVE_VERSION } from './game/save';
 import type { GameState } from './game/types';
 import { useI18n } from './i18n/I18n';
 import { ExploreScreen } from './ui/ExploreScreen';
 import { MissionScreen } from './ui/MissionScreen';
-import { ConfirmNewGame, Credits, HowToPlay, MainMenu, Results, Starfield, type SaveSlot } from './ui/Screens';
+import { ConfirmNewGame, Credits, DifficultySelect, HowToPlay, MainMenu, Results, Starfield, type SaveSlot } from './ui/Screens';
 
-type Screen = 'menu' | 'how' | 'credits' | 'mission' | 'explore' | 'results';
-type Notice = 'invalid' | 'resumed' | null;
+type Screen = 'menu' | 'difficulty' | 'how' | 'credits' | 'mission' | 'explore' | 'results';
+type Notice = 'invalid' | 'resumed' | 'migrated' | null;
 
 function readFxPref(): boolean {
   try {
@@ -24,9 +25,10 @@ const storage = browserStorage();
 /** Read the save once at start-up (module scope: StrictMode would run a state initializer twice,
  *  and the first run already removes an unreadable save). */
 function initialLoad(): { game: GameState; saved: boolean; notice: Notice } {
+  // structure (shifts, events, expeditions) is the same in every difficulty
   const r = loadGame(storage, MISSION);
-  if (r.kind === 'ok') return { game: r.save.state, saved: true, notice: r.save.exploring ? 'resumed' : null };
-  return { game: createInitialState(MISSION), saved: false, notice: r.kind === 'invalid' ? 'invalid' : null };
+  if (r.kind === 'ok') return { game: r.save.state, saved: true, notice: r.save.exploring ? 'resumed' : r.migratedFrom ? 'migrated' : null };
+  return { game: createInitialState(missionFor(DEFAULT_DIFFICULTY)), saved: false, notice: r.kind === 'invalid' ? 'invalid' : null };
 }
 const BOOT = initialLoad();
 
@@ -39,6 +41,9 @@ export default function App() {
   const [confirm, setConfirm] = useState(false);
   const [fx, setFx] = useState(readFxPref);
   const [expedition, setExpedition] = useState<string | null>(null);
+  /** Difficulty pre-selected on the difficulty screen (last one played, else Easy). */
+  const [pick, setPick] = useState<DifficultyId>(boot.saved ? boot.game.difficulty : DEFAULT_DIFFICULTY);
+  const cfg = missionFor(game.difficulty);
   const { t } = useI18n();
   /** Guards against an expedition result being applied twice (double tap, repeated events). */
   const exitDone = useRef(false);
@@ -52,12 +57,13 @@ export default function App() {
     if (saveGame(storage, game, screen === 'explore' ? expedition : null)) setSaved(true);
   }, [game, inGame, screen, expedition]);
 
-  const slot: SaveSlot | null = saved ? { shift: game.shift, total: MISSION.totalShifts, finished: game.status !== 'playing' } : null;
+  const slot: SaveSlot | null = saved ? { shift: game.shift, total: cfg.totalShifts, finished: game.status !== 'playing', difficulty: game.difficulty } : null;
 
-  const startFresh = () => {
+  const startFresh = (difficulty: DifficultyId) => {
     clearSave(storage);
     seenBaseWarnings.current.clear();
-    const fresh = createInitialState(MISSION);
+    setPick(difficulty);
+    const fresh = createInitialState(missionFor(difficulty));
     // Development-only QA shortcut: ?devShift=N starts at shift N (stripped from production builds)
     const dev = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('devShift')) : 0;
     setGame(dev > 1 && dev <= MISSION.totalShifts ? { ...fresh, shift: dev } : fresh);
@@ -65,11 +71,12 @@ export default function App() {
     setConfirm(false);
     setScreen('mission');
   };
-  /** New game: ask first if it would overwrite an unfinished saved mission. */
+  /** New game: ask first if it would overwrite an unfinished saved mission, then choose the difficulty. */
   const newGame = () => {
-    if (saved && hasProgress({ v: 1, savedAt: 0, state: game, exploring: null })) setConfirm(true);
-    else startFresh();
+    if (saved && hasProgress({ v: SAVE_VERSION, savedAt: 0, state: game, exploring: null })) setConfirm(true);
+    else chooseDifficulty();
   };
+  const chooseDifficulty = () => { setConfirm(false); setNotice(null); setScreen('difficulty'); };
   const continueGame = () => {
     setScreen(game.status === 'playing' ? 'mission' : 'results');
   };
@@ -83,7 +90,7 @@ export default function App() {
     clearSave(storage);
     seenBaseWarnings.current.clear();
     setSaved(false);
-    setGame(createInitialState(MISSION));
+    setGame(createInitialState(missionFor(DEFAULT_DIFFICULTY)));
     setExpedition(null);
     setNotice('invalid');
     setScreen('menu');
@@ -98,13 +105,14 @@ export default function App() {
             onStart={newGame}
             onContinue={saved ? continueGame : undefined}
             slot={slot}
-            notice={notice === 'invalid' ? t('save.invalid') : notice === 'resumed' ? t('save.resumed') : null}
+            notice={notice === 'invalid' ? t('save.invalid') : notice === 'resumed' ? t('save.resumed') : notice === 'migrated' ? t('save.migrated') : null}
             onHow={() => setScreen('how')}
             onCredits={() => setScreen('credits')}
             fx={fx}
           />
         )}
-        {screen === 'how' && <HowToPlay onBack={() => setScreen('menu')} onStart={saved && game.status === 'playing' ? continueGame : newGame} />}
+        {screen === 'difficulty' && <DifficultySelect initial={pick} onStart={startFresh} onBack={() => setScreen('menu')} />}
+        {screen === 'how' && <HowToPlay cfg={saved ? cfg : missionFor(pick)} onBack={() => setScreen('menu')} onStart={saved && game.status === 'playing' ? continueGame : newGame} />}
         {screen === 'credits' && <Credits onBack={() => setScreen('menu')} />}
         {screen === 'mission' && (
           <MissionScreen
@@ -121,20 +129,21 @@ export default function App() {
         {screen === 'explore' && expedition && (
           <ExploreScreen
             missionId={expedition}
+            difficulty={game.difficulty}
             fx={fx}
             onExit={(result) => {
               if (exitDone.current) return;
               exitDone.current = true;
               // The base game state is kept in App while exploring; only the result is applied (once).
-              setGame((g) => applyExpedition(g, MISSION, expedition, result));
+              setGame((g) => applyExpedition(g, missionFor(g.difficulty), expedition, result));
               setExpedition(null);
               setScreen('mission');
             }}
           />
         )}
-        {screen === 'results' && <Results state={game} onRestart={startFresh} onMenu={() => setScreen('menu')} />}
+        {screen === 'results' && <Results state={game} onRestart={chooseDifficulty} onMenu={() => setScreen('menu')} />}
       </Guard>
-      {confirm && slot && <ConfirmNewGame slot={slot} onYes={startFresh} onNo={() => setConfirm(false)} />}
+      {confirm && slot && <ConfirmNewGame slot={slot} onYes={chooseDifficulty} onNo={() => setConfirm(false)} />}
     </div>
   );
 }

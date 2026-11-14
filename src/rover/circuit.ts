@@ -25,15 +25,29 @@ const OPP: Record<number, number> = { [N]: S, [S]: N, [E]: W, [W]: E };
 const STEP: Record<number, [number, number]> = { [N]: [-1, 0], [S]: [1, 0], [E]: [0, 1], [W]: [0, -1] };
 
 /** Solution path: W→(1,0)→(0,0)→(0,1)→(0,2)→(1,2)→(2,2)→E. Rotatable tiles start scrambled. */
+const SOLVED = [
+  { r: 0, c: 0, mask: S | E, rot: true },
+  { r: 0, c: 1, mask: W | E, rot: false },
+  { r: 0, c: 2, mask: W | S, rot: true },
+  { r: 1, c: 0, mask: W | N, rot: false },
+  { r: 1, c: 2, mask: N | S, rot: false },
+  { r: 2, c: 2, mask: N | E, rot: true },
+];
+
+/** Correct mask of each rotatable tile (index → mask), used for the Easy-mode wiring hint. */
+export function targetMasks(): Map<number, number> {
+  return new Map(SOLVED.filter((p) => p.rot).map((p) => [p.r * 3 + p.c, p.mask]));
+}
+
+/** Rotatable tiles that are not yet in their correct position. */
+export function wrongTiles(c: Circuit): number {
+  let n = 0;
+  for (const [i, m] of targetMasks()) if (c.tiles[i].mask !== m) n++;
+  return n;
+}
+
 export function createCircuit(): Circuit {
-  const solved = [
-    { r: 0, c: 0, mask: S | E, rot: true },
-    { r: 0, c: 1, mask: W | E, rot: false },
-    { r: 0, c: 2, mask: W | S, rot: true },
-    { r: 1, c: 0, mask: W | N, rot: false },
-    { r: 1, c: 2, mask: N | S, rot: false },
-    { r: 2, c: 2, mask: N | E, rot: true },
-  ];
+  const solved = SOLVED;
   // decorative fixed pieces that are not on the path
   const tiles: Tile[] = Array.from({ length: 9 }, (_, i) => ({ mask: [0, 0, 0, 0, E | W, 0, N | E, W | E, 0][i], rotatable: false }));
   for (const p of solved) {

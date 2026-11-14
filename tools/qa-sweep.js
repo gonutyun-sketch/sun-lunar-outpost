@@ -1,7 +1,7 @@
 /**
  * Screen-by-screen responsive sweep (dev server only; needs tools/qa-responsive.js loaded first).
  * Open http://localhost:5173/?devShift=9 at the viewport to test, then run:  await __sweep()
- * It walks: menu → how-to → credits → base (emergency card) → rover menu → each mission briefing,
+ * It walks: menu → how-to → science tabs → new game → difficulty select → base (emergency card, coach tips) → rover menu → each mission briefing,
  * driving view and minigame overlay → pause menu → shift report → … → results, and returns
  * __qa.check() reports for every screen. The rover is placed at targets through the dev-only hook
  * (layout test; driving itself is covered by the touch play-tests).
@@ -34,7 +34,12 @@
     const mb = () => $$('.menu-buttons button');
     await click(mb()[mb().length - 2]); C('how-to'); window.scrollTo(0, 0);
     await click($$('.header-actions .btn')[0]);
-    await click(mb()[mb().length - 1]); C('credits'); window.scrollTo(0, 0);
+    await click(mb()[mb().length - 1]); C('science: survive'); window.scrollTo(0, 0);
+    // every science tab (long pages: check each one for overflow)
+    for (const tab of $$('.sci-tab').slice(1)) { await click(tab, 200); window.scrollTo(0, 0); C(`science: ${tab.id.replace('sci-tab-', '')}`); }
+    await click($('#sci-tab-survive'), 200);
+    for (const d of $$('.topic details')) d.open = true;
+    await wait(200); C('science: details open');
     await click($$('.header-actions .btn')[0]);
     if ($('.btn-continue')) {
       // a saved game exists: New game -> confirmation dialog -> confirm
@@ -42,7 +47,13 @@
       await click(mb()[1], 300);
       if ($('.confirm-modal')) { C('new-game confirm'); await click($('.confirm-modal .btn-danger'), 500); }
     } else await click(mb()[0], 500);
+    window.scrollTo(0, 0); C('difficulty select');
+    await click($('.diff-card.diff-normal'), 150); C('difficulty: normal selected');
+    await click($('.diff-card.diff-easy'), 150);
+    await click($('.diff-actions .btn-primary'), 500);
     C('base + emergency (shift 9)');
+    if (!$('.coach')) await click($('.coach-btn'), 200);
+    C('base + coach tips');
     await click($('.event-card .choice'), 300); C('emergency decided');
     await click($('.rover-launch > .btn-rover')); C('rover menu'); await click($('.rover-launch > .btn-rover'));
     // Mission 1: briefing, driving, circuit, pause

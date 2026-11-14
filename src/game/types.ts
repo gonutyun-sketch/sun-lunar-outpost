@@ -1,3 +1,5 @@
+import type { DifficultyId } from './difficulty';
+
 export type FacilityId = 'oxygen' | 'greenhouse' | 'shelter' | 'lab';
 export const FACILITY_IDS: FacilityId[] = ['oxygen', 'greenhouse', 'shelter', 'lab'];
 
@@ -112,6 +114,8 @@ export interface SiteData {
 }
 
 export interface MissionConfig {
+  /** Difficulty these values belong to (src/game/difficulty.ts). */
+  difficulty: DifficultyId;
   site: SiteData;
   missionName: string;
   totalShifts: number;
@@ -143,7 +147,7 @@ export type RadiationOutcome = 'none' | 'protected' | 'exposed' | 'partial';
 export type WarningLevel = 'info' | 'caution' | 'critical';
 export type WarningCode =
   | 'habitatFail' | 'deficit' | 'radNoShelter' | 'o2Out' | 'o2Low' | 'foodOut' | 'foodLow' | 'nextHabitat' | 'batteryLow'
-  | 'choiceNeeded';
+  | 'choiceNeeded' | 'tryOtherChoice';
 export interface Warning {
   level: WarningLevel;
   /** Stable message id for localisation (UI translates `warn.<code>` with `params`). */
@@ -199,6 +203,8 @@ export interface ShiftReport extends ShiftOutcome {
 }
 
 export interface GameState {
+  /** Chosen at New Game; fixed for the whole mission (saved with it). */
+  difficulty: DifficultyId;
   /** The shift the player is currently planning (1-based). */
   shift: number;
   resources: Resources;

@@ -33,16 +33,24 @@ export interface Gauge {
 
 export interface PressureGame {
   gauges: Gauge[];
+  /** Seconds all gauges must stay in band (difficulty setting, default P.hold). */
+  hold: number;
+  /** Multiplies the wobble from turning a valve too fast (difficulty setting, default 1). */
+  wobbleScale: number;
   time: number;
   stable: number;
   vents: number;
   done: boolean;
 }
 
-export function createPressureGame(): PressureGame {
-  const mk = (leak: number, band: [number, number], p: number): Gauge => ({ p, valve: p, speed: 0, wobble: 0, leak, band });
+/** Difficulty options: `bandPad` widens each target band on both sides; `hold` and `wobbleScale` as above. */
+export function createPressureGame(opts: { bandPad?: number; hold?: number; wobbleScale?: number } = {}): PressureGame {
+  const pad = opts.bandPad ?? 0;
+  const mk = (leak: number, band: [number, number], p: number): Gauge => ({ p, valve: p, speed: 0, wobble: 0, leak, band: [band[0] - pad, band[1] + pad] });
   return {
     gauges: [mk(2.5, [55, 68], 22), mk(4, [38, 50], 70), mk(5.5, [62, 74], 30)],
+    hold: opts.hold ?? P.hold,
+    wobbleScale: opts.wobbleScale ?? 1,
     time: 0,
     stable: 0,
     vents: 0,
@@ -69,7 +77,7 @@ export function stepPressure(s: PressureGame, sel: number, dir: -1 | 0 | 1, dt: 
     }
     g.valve = Math.max(0, Math.min(100, g.valve + g.speed * dt));
     const frac = Math.abs(g.speed) / P.valveMax;
-    if (frac > P.calm) g.wobble += P.wobbleGain * (frac - P.calm) * dt / (1 - P.calm) * 2;
+    if (frac > P.calm) g.wobble += P.wobbleGain * s.wobbleScale * (frac - P.calm) * dt / (1 - P.calm) * 2;
     g.wobble *= Math.exp(-P.wobbleDecay * dt);
     const osc = g.wobble * Math.sin(time * 6.5 + i * 2.1) * 6.5;
     g.p += ((g.valve - g.p) * P.response - g.leak + osc) * dt;
@@ -84,7 +92,7 @@ export function stepPressure(s: PressureGame, sel: number, dir: -1 | 0 | 1, dt: 
   const all = gauges.every(inBand);
   const stable = vented !== null || !all ? 0 : s.stable + dt;
   return {
-    game: { gauges, time, stable, vents: s.vents + (vented !== null ? 1 : 0), done: stable >= P.hold },
+    game: { ...s, gauges, time, stable, vents: s.vents + (vented !== null ? 1 : 0), done: stable >= s.hold },
     vented,
   };
 }

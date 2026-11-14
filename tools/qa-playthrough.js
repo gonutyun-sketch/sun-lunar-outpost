@@ -4,7 +4,9 @@
  *   await __play.toShift(6)   // play from the current base screen until shift 6 (or the end)
  *   await __play.toEnd()      // play until the results screen
  * Base decisions follow simple rules (Solar upgrade at shift 2, lab when power allows, greenhouse when food < 50,
- * first emergency option). Rover missions are completed with shortcuts: the rover is placed at each site, the
+ * first emergency option; when power is short: lab off, greenhouse off, then oxygen off if O2 >= 45).
+ * Start a game first (menu -> difficulty -> start). If the browser pane is hidden or slow, add a frame shim first:
+ *   window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16) Rover missions are completed with shortcuts: the rover is placed at each site, the
  * circuit is solved by trying rotations, the pressure gauges are set into their bands. Driving and the
  * minigames themselves are covered by unit tests and the touch/keyboard play-tests.
  * Use it to test save/continue: stop at a shift, reload the page, press Continue, and compare.
@@ -81,6 +83,12 @@
     await set(3, true);
     const adv = () => $$('.advance button').find((b) => /진행|ADVANCE|결과|RESULT/i.test(b.textContent));
     for (const i of [3, 1]) if (adv()?.disabled) await set(i, false);
+    // still short of power: with plenty of oxygen stored, pause the oxygen plant for one shift
+    const o2 = Number($$('.stat .val')[1]?.textContent || 0);
+    if (adv()?.disabled && o2 >= 45) await set(0, false);
+    // the chosen emergency response itself needs the power: take the other response
+    const ch = $$('.event-card .choice');
+    if (adv()?.disabled && ch.length > 1 && ch[0].classList.contains('picked')) { ch[1].click(); await w(200); }
     const a = adv();
     if (!a || a.disabled) return false;
     a.click(); await w(500);

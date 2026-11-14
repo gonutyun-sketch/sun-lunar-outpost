@@ -1,7 +1,7 @@
 /**
  * Save / continue (browser localStorage). Pure helpers — no React.
  *
- * What is stored: only the mission GameState (shift, resources, facilities, upgrades, decisions,
+ * What is stored: only the mission GameState (difficulty, shift, resources, facilities, upgrades, decisions,
  * shift history, rover results) plus a version number and a save time. No names, IDs or other
  * personal data. Language ('sun-lang') and effects ('sun-fx') keep their own keys.
  *
@@ -9,11 +9,13 @@
  * always holds the last safe base state. `exploring` marks an interrupted run so the menu can say
  * the game resumes from the base; the expedition result is applied (once) only when the run ends.
  */
+import { isDifficulty, LEGACY_DIFFICULTY } from './difficulty';
 import { FACILITY_IDS, UPGRADE_IDS } from './types';
 import type { GameState, MissionConfig } from './types';
 
 export const SAVE_KEY = 'sun-save';
-export const SAVE_VERSION = 1;
+/** v2 adds `state.difficulty`. v1 saves (before difficulties existed) are migrated, never deleted. */
+export const SAVE_VERSION = 2;
 
 export interface SaveFile {
   v: number;
@@ -25,7 +27,8 @@ export interface SaveFile {
 
 export type LoadResult =
   | { kind: 'none' }
-  | { kind: 'ok'; save: SaveFile }
+  /** `migratedFrom`: the save was written by an older version and was upgraded in place. */
+  | { kind: 'ok'; save: SaveFile; migratedFrom?: number }
   /** Present but unreadable (corrupt JSON, wrong shape or another version): ignored and removed. */
   | { kind: 'invalid'; reason: 'parse' | 'version' | 'shape' };
 
@@ -61,6 +64,7 @@ function validFlags(x: unknown, keys: readonly string[]): boolean {
 /** Structural check of a GameState read from storage against the current mission config. */
 export function isValidState(x: unknown, cfg: MissionConfig): x is GameState {
   if (!isObj(x)) return false;
+  if (!isDifficulty(x.difficulty)) return false;
   const expIds = cfg.expeditions.map((e) => e.id);
   if (!isNum(x.shift) || !Number.isInteger(x.shift) || x.shift < 1 || x.shift > cfg.totalShifts) return false;
   if (!validResources(x.resources)) return false;
@@ -97,10 +101,22 @@ export function loadGame(kv: KV | null, cfg: MissionConfig): LoadResult {
   let data: unknown;
   try { data = JSON.parse(raw); } catch { return discard(kv, 'parse'); }
   if (!isObj(data)) return discard(kv, 'shape');
-  if (data.v !== SAVE_VERSION) return discard(kv, 'version'); // future: migrate older versions here
+  let migratedFrom: number | undefined;
+  if (data.v === 1) {
+    // v1 (single difficulty): those rules are exactly today's Hard mode, so the mission continues unchanged.
+    if (!isObj(data.state)) return discard(kv, 'shape');
+    if (data.state.difficulty === undefined) data.state = { ...data.state, difficulty: LEGACY_DIFFICULTY };
+    migratedFrom = 1;
+  } else if (data.v !== SAVE_VERSION) return discard(kv, 'version');
   if (!isValidState(data.state, cfg)) return discard(kv, 'shape');
   const exploring = typeof data.exploring === 'string' && cfg.expeditions.some((e) => e.id === data.exploring) ? data.exploring : null;
-  return { kind: 'ok', save: { v: SAVE_VERSION, savedAt: isNum(data.savedAt) ? data.savedAt : 0, state: data.state, exploring } };
+  const save: SaveFile = { v: SAVE_VERSION, savedAt: isNum(data.savedAt) ? data.savedAt : 0, state: data.state, exploring };
+  if (migratedFrom) {
+    // write the upgraded file back so the migration happens once
+    try { kv.setItem(SAVE_KEY, JSON.stringify(save)); } catch { /* storage full or blocked: keep playing */ }
+    return { kind: 'ok', save, migratedFrom };
+  }
+  return { kind: 'ok', save };
 }
 
 function discard(kv: KV, reason: 'parse' | 'version' | 'shape'): LoadResult {

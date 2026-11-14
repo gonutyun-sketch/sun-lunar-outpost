@@ -41,8 +41,9 @@ export interface Rover {
   driven: number;
 }
 
-export function createRover(m: WorldMap): Rover {
-  return { x: m.start.x, y: m.start.y, vx: 0, vy: 0, angle: m.start.angle, battery: ROVER.batteryStart, driven: 0 };
+/** `battery` = starting charge (difficulty setting; default = original value). */
+export function createRover(m: WorldMap, battery: number = ROVER.batteryStart): Rover {
+  return { x: m.start.x, y: m.start.y, vx: 0, vy: 0, angle: m.start.angle, battery: Math.min(ROVER.batteryMax, battery), driven: 0 };
 }
 
 const angleLerp = (a: number, b: number, t: number) => {
@@ -88,8 +89,11 @@ export interface StepResult {
   rate: number;
 }
 
-/** Advance the rover by dt seconds. `frozen` = no driving (e.g. while repairing), battery still changes. */
-export function stepRover(m: WorldMap, prev: Rover, input: Input, dt: number, frozen = false): StepResult {
+/**
+ * Advance the rover by dt seconds. `frozen` = no driving (e.g. while repairing), battery still changes.
+ * `drainScale` (difficulty setting) multiplies battery drain only — movement, collisions and charging never change.
+ */
+export function stepRover(m: WorldMap, prev: Rover, input: Input, dt: number, frozen = false, drainScale = 1): StepResult {
   const r: Rover = { ...prev };
   let ix = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   let iy = (input.down ? 1 : 0) - (input.up ? 1 : 0);
@@ -143,7 +147,7 @@ export function stepRover(m: WorldMap, prev: Rover, input: Input, dt: number, fr
   const shadow = level > 0;
   const charging = onCharger(m, r.x, r.y);
   const terrainDrain = level === 2 ? ROVER.deepDrain : level === 1 ? ROVER.shadowDrain : ROVER.sunDrain;
-  const rate = charging ? ROVER.padCharge : -terrainDrain - (moving ? ROVER.moveDrain : 0);
+  const rate = charging ? ROVER.padCharge : -(terrainDrain + (moving ? ROVER.moveDrain : 0)) * drainScale;
   r.battery = Math.max(0, Math.min(ROVER.batteryMax, r.battery + rate * dt));
 
   return { rover: r, bumped, inShadow: shadow, deep: level === 2, charging, moving, rate };

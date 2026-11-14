@@ -20,9 +20,13 @@ src/data/mission.json   All tunable numbers from GDD (resources, costs, FICTIONA
 src/data/site.json      NASA LRO/LOLA-derived site value + full provenance (do not edit without re-extracting)
 tools/extract-illumination.mjs  Reproducible NASA pixel extraction (HTTP Range); node tools/extract-illumination.mjs
 src/i18n/en.ts, ko.ts   UI text dictionaries (KO default). Add a key to en.ts → TypeScript requires it in ko.ts
+src/i18n/en.learn.ts, ko.learn.ts  Difficulty, coach, warnings (.easy variants) and Science & Credits texts (merged into en/ko)
 src/i18n/I18n.tsx       Language context, LangToggle, localStorage 'sun-lang'
 src/game/types.ts       Shared types
-src/game/config.ts      Loads mission.json as MissionConfig
+src/game/config.ts      MISSION = original rules (= Hard); UI uses missionFor(state.difficulty)
+src/game/difficulty.ts  Difficulty modes: per-mode fictional values (base, rover, help); missionFor(id) builds the config (NASA site data shared)
+src/game/coach.ts       Beginner coach tips: picks ≤ 2 situation tips per shift (pure, tested)
+src/game/difficulty.test.ts Config protection + balance per difficulty + coach + stuck-deficit regression
 src/game/engine.ts      PURE simulation: simulateShift, advanceShift, getWarnings, computeScore
 src/game/debrief.ts     Results text + 3 takeaways
 src/game/engine.test.ts Unit tests (incl. a reference winning plan = 95/A)
@@ -34,7 +38,7 @@ src/ui/MissionScreen.tsx Top bar, scene, controls, power budget, log, shift repo
 src/ui/BaseScene.tsx    SVG lunar base
 src/ui/ExploreScreen.tsx Rover exploration mode (Canvas loop, input, HUD, puzzle overlay, pause/fail/success)
 src/rover/world.ts      Exploration map data (craters, rocks, blocks, shadow zones, sites)
-src/rover/sim.ts        Rover physics + battery (pure, tested)
+src/rover/sim.ts        Rover physics + battery (pure, tested); stepRover(..., drainScale) and createRover(map, battery) for difficulty
 src/rover/circuit.ts    Circuit rotation puzzle (pure, tested)
 src/rover/pressure.ts   Pressure-regulation minigame (pure, tested)
 src/rover/render.ts     Canvas drawing (zoom-aware camera)
@@ -42,8 +46,9 @@ src/rover/fx.ts         Visual-only state: particles, tracks, look-ahead camera,
 src/rover/touch.ts      Joystick vector, camera zoom, DPR cap (pure, tested)
 tools/qa-responsive.js  Dev QA: layout checks + synthetic touch helpers (load in the browser console)
 tools/qa-playthrough.js Dev QA: plays the whole mission through the UI (__play.toShift(n), __play.toEnd()) for save/continue tests
-tools/qa-sweep.js       Dev QA: walks all 15 screens at the current viewport (use with ?devShift=9)
-src/ui/Screens.tsx      Starfield, MainMenu, HowToPlay, Credits, Results (+ graph)
+tools/qa-sweep.js       Dev QA: walks 28 screens (menu, how-to, 10 science tabs, difficulty, base, 3 missions, report, results) at the current viewport (use with ?devShift=9)
+src/rover/difficulty.rover.test.ts  Rover/pressure/circuit settings per difficulty (movement identical, battery only)
+src/ui/Screens.tsx      Starfield, MainMenu, DifficultySelect, HowToPlay, Credits (tabbed science hub), Results (+ graph)
 src/App.tsx             Screen routing, effects toggle
 ```
 
@@ -65,16 +70,24 @@ Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(ba
 - Missions are step lists in ExploreScreen `MISSIONS` (kinds: goto, circuit, pickup, scan, pressure, collect, dock). Mission 3 (sampleSurvey) uses `collect` (hold E, DRILL_TIME) and `rewardResearch`. To add more missions: add an expedition in mission.json (fromShift, effect), a MissionDef with steps (e.g. a new `sample` kind), sites in world.ts, and `ex.*` keys in en.ts/ko.ts. Engine effects available: solarMult, oxygenMult, oxygenLeak, failEnergyCost, failOxygenCost; `expeditionLog` feeds the shift report.
 - Tuning: ROVER constants in src/rover/sim.ts; map in world.ts; `npx vitest run src/rover` prints route times/battery.
 
+## Difficulty modes
+- One engine. `DIFFICULTIES` in src/game/difficulty.ts holds per-mode values: `base` (initial supplies, crew use, eventDamage multiplier, upgrade costs, rover failure cost, O₂ leak), `rover` (battery start, drainScale, rotateCost, pressure band pad / hold / wobble, circuit hint, shadow alerts, charge guide) and `help` (coach mode, warning tone).
+- Hard = mission.json exactly (tested). Never put NASA values or the shift scenario into the per-mode values.
+- GameState.difficulty is fixed at New Game and saved (save v2). v1 saves are migrated to Hard.
+- To retune: change the numbers, run `npx vitest run src/game/difficulty.test.ts src/rover/difficulty.rover.test.ts` (prints random-player and rover margins per mode). Targets: sensible play A in every mode; Easy recovers from no upgrades + bad choices + failed sorties but random clicking < 60 % and never launching the rover still fails; Normal random < 35 %, upgrades worth > 5 points, skipping the O₂ repair is fatal; Hard unchanged.
+- Warnings: Easy shows `warn.<code>.easy` texts — add one for every new warning code.
+
 ## Repository
 - GitHub (public): https://github.com/gonutyun-sketch/sun-lunar-outpost — `origin`, branch `main`. Every push to main runs .github/workflows/deploy.yml (typecheck, tests, build, Pages deploy).
 
 ## Next tasks for the next AI
-1. After deployment: add URL to README, run a full playthrough on the live URL.
-2. Apply the team's difficulty decision (see PROGRESS.md "Balance findings") if any.
-3. Submission materials.
+1. Human play-test of Easy/Normal with students; adjust DIFFICULTIES values if needed (see Difficulty modes).
+2. Mission 1 route trade-off on Hard is now tiny (see PROGRESS.md Known issues) — team decision.
+3. After deployment: add URL to README, run a full playthrough on the live URL.
+4. Submission materials.
 
 ## Save notes
-- Bump `SAVE_VERSION` in src/game/save.ts whenever GameState changes shape; old saves are then discarded safely (or add a migration in `loadGame`).
+- Bump `SAVE_VERSION` in src/game/save.ts whenever GameState changes shape and add a migration in `loadGame` (v1 → v2 adds `difficulty: 'hard'`).
 - `isValidState` checks every field the UI reads; extend it when you add state.
 - Never write to the save while exploring except through App (checkpoint = base state + `exploring`).
 
