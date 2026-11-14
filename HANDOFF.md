@@ -78,13 +78,15 @@ Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(ba
 - To retune: change the numbers, run `npx vitest run src/game/difficulty.test.ts src/rover/difficulty.rover.test.ts` (prints random-player and rover margins per mode). Targets: sensible play A in every mode; Easy recovers from no upgrades + bad choices + failed sorties but random clicking < 60 % and never launching the rover still fails; Normal random < 35 %, upgrades worth > 5 points, skipping the O₂ repair is fatal; Hard unchanged.
 - Warnings: Easy shows `warn.<code>.easy` texts — add one for every new warning code.
 
-## Repository
+## Repository & deployment
 - GitHub (public): https://github.com/gonutyun-sketch/sun-lunar-outpost — `origin`, branch `main`. Every push to main runs .github/workflows/deploy.yml (typecheck, tests, build, Pages deploy).
+- **Live game:** https://gonutyun-sketch.github.io/sun-lunar-outpost/ (GitHub Pages, Source: GitHub Actions; enabled 2026-11-15). Deploys automatically on every push to main (~1 min). Check the Actions tab if a deploy fails; `vite.config.ts` uses `base: './'`, so the build works under the repository sub-path.
+- Production builds contain no dev hooks (`__rover`, `__explore`, `?devShift`). To QA the live site, drive with real keyboard events (see PROGRESS.md "Live deployment").
 
 ## Next tasks for the next AI
 1. Human play-test of Easy/Normal with students; adjust DIFFICULTIES values if needed (see Difficulty modes).
 2. Mission 1 route trade-off was rebalanced (PROGRESS.md "Rover route rebalance"); verify with students that the briefing map helps.
-3. After deployment: add URL to README, run a full playthrough on the live URL.
+3. Deployment done (see Repository & deployment); re-test the live URL after each merge to main.
 4. Submission materials.
 
 ## Save notes

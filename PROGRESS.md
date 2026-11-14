@@ -1,6 +1,6 @@
 # PROGRESS — SUN: Lunar Outpost
 
-_Last updated: 2026-11-15 (rover route rebalance)_
+_Last updated: 2026-11-15 (merged and deployed)_
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -16,9 +16,9 @@ _Last updated: 2026-11-15 (rover route rebalance)_
 | 10 | Save & continue (localStorage, versioned, exploration checkpoint) | ✅ Done |
 | 11 | Rover polish: graphics, mission effects, camera/feedback, battery warnings, performance | ✅ Done (emulator-tested only) |
 | 11b | Pixel / 2.5D redesign (OpenAI Codex, PR #1) | ✅ Merged by the team |
-| 12 | Difficulty modes, beginner help, Science & Credits learning hub, QA | ✅ Done on branch feature/difficulty-education-qa (PR #2, awaiting review / student play-test) |
-| 12b | Rover route rebalance (Mission 1 shortcut vs sunny detour), route guide in the briefing | ✅ Done on branch feature/rover-route-balance (stacked on PR #2) |
-| 6 | Public deployment, final QA, submission | ⏳ Needs GitHub/hosting account action by the team |
+| 12 | Difficulty modes, beginner help, Science & Credits learning hub, QA | ✅ Merged (PR #2) |
+| 12b | Rover route rebalance (Mission 1 shortcut vs sunny detour), route guide in the briefing | ✅ Merged (PR #3) |
+| 6 | Public deployment, final QA, submission | ✅ Deployed: https://gonutyun-sketch.github.io/sun-lunar-outpost/ · submission materials remaining |
 
 ## Phase 5 delivered
 - Science: 88.44% explained as long-term Sun visibility (not efficiency/forecast) on Credits + mission tooltip; "Why the site matters" bars (88.4 / 55.4 / 0%) and game calculation (ridge 154 vs 300 m-average 95 energy over 8 shifts); badges "NASA LOLA" vs "FICTIONAL SCENARIO".
@@ -142,9 +142,19 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Other missions on Hard: Mission 3 safe survey ends with 22.5 (risky 19.3); Mission 2 full trip (depot, all three valves, 15 s pressure work, dock) ends > 15. Normal/Easy keep 35+ margins.
 - Briefing route guide (Mission 1): Easy = both routes explained with time and battery + mini map; Normal = one compact line + mini map; Hard = one sentence. The numbers are computed live by `routeEstimate` for the chosen difficulty, so the hint always matches the rules.
 
+## Live deployment (2026-11-15)
+- PR #2 (difficulty, learning content) and PR #3 (rover route rebalance; retargeted to main) merged with merge commits; main = 168decc. A clean checkout (`npm ci`, typecheck, 116 tests, build) passed before merging.
+- GitHub Pages enabled (Source: GitHub Actions). Deploy runs for d0ff4ec and 168decc succeeded; the two earlier failed runs (e6e55c2, 31b2247) failed only because Pages was not enabled yet.
+- Live checks on https://gonutyun-sketch.github.io/sun-lunar-outpost/ (HTTPS 200, no login; JS/CSS bundle identical to the local build; fonts Orbitron/Inter/Noto Sans KR load):
+  - Full games played through the UI with real keyboard input (rover missions driven by a frame-exact key schedule computed from the game's own simulation, puzzles solved through the screen): Easy success A 90, Normal B 89, Hard B 84 — all 12 shifts and all three rover missions completed in each (Mission 1 briefing shows the route guide; map on Easy/Normal, one line on Hard).
+  - Save: reload → CONTINUE restores difficulty and progress (finished game opens results); reload during Mission 1 → notice, same base state, difficulty kept. KO/EN switch, 10 science tabs, How to Play.
+  - Layout at 320×568, 375×667, 390×844, 844×390, 768×1024, 1024×768 (touch layout) and 1366×768, 1920×1080: 22 screens each incl. the Mission 1 round trip and circuit puzzle — no horizontal scroll, cut-off or overlapping controls, touch targets ≥ 44 px. Touch joystick moved the rover (136 → 88 m) in mobile emulation.
+  - No console errors from the game.
+- NOT verified: real phones/tablets (only emulation), Mission 2/3 puzzle overlays at every live size (they were checked on the identical build on the dev server), real students.
+
 ## Remaining (priority order)
-1. **P0** Repo is public at https://github.com/gonutyun-sketch/sun-lunar-outpost (pushed 2026-11-14, full history). Remaining: enable Pages (Settings → Pages → Source: GitHub Actions), re-run the workflow, add the live URL to README.
-2. **P1** Student play-test of Easy/Normal (real devices); tune `DIFFICULTIES` if needed. Review PR for feature/difficulty-education-qa and merge.
+1. **P0** Live game: https://gonutyun-sketch.github.io/sun-lunar-outpost/ (GitHub Pages via Actions, main = merge of PR #2 + PR #3). Remaining: test on real phones/tablets and with students.
+2. **P1** Student play-test of Easy/Normal (real devices); tune `DIFFICULTIES` if needed.
 3. **P1** Final submission: Space Apps project page, demo video, AI disclosure.
 4. **P2** Optional: sound, more scene detail.
 
@@ -155,8 +165,6 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Control panel may still scroll slightly at 1366×768 when 2+ warnings are shown (all critical warnings are now above the fold).
 - Mid-transition screenshots can show the fading shift banner (cosmetic).
 
-## Last test results (2026-11-15, rover route rebalance)
-- `npm run typecheck` ✅ · `npm test` ✅ 116/116 (3 new: M1 per-difficulty round trips, slow-repair risk, M2 full trip; battery rule and M1 route tests rewritten) · `npm run build` ✅.
-- Browser (dev server): Mission 1 driven with keyboard input on Hard — shortcut 10.2 s / 66.0 at the site, sunny detour 10.6 s / 73.9 (matches the simulation); repair + sunny return docked with 36. Battery 0 in shadow → failure, base energy −8 (Hard) applied once and saved. Full 12-shift games with all 3 missions: Easy A 90, Normal B 89, Hard B 84. Reload during Mission 1 keeps difficulty and base state. Touch joystick drive (390×844) works; English route guide checked.
-- Viewport sweep (28–29 screens incl. the longer Mission 1 briefing): 320×568, 375×667, 390×844, 844×390, 768×1024, 1024×768, 1366×768, 1920×1080 — all OK. No console errors.
-- NOT verified: real phones/tablets, real students; a timer frame shim was used because the browser pane was hidden.
+## Last test results (2026-11-15, live deployment)
+- `npm ci` + `npm run typecheck` ✅ · `npm test` ✅ 116/116 · `npm run build` ✅ (clean checkout of the merged code); GitHub Actions build + deploy ✅.
+- Live site: see "Live deployment" above.

@@ -6,10 +6,12 @@ An educational strategy game for elementary and middle-school students, with thr
 
 ![Mission screen](docs/screenshots/mission.jpg)
 
-## Play
-- **Source:** https://github.com/gonutyun-sketch/sun-lunar-outpost
-- **Live demo:** _GitHub Pages URL (https://gonutyun-sketch.github.io/sun-lunar-outpost/) once Pages is enabled with source "GitHub Actions"_
-- Locally: `npm install` then `npm run dev`, and open http://localhost:5173
+## ▶ PLAY GAME
+**https://gonutyun-sketch.github.io/sun-lunar-outpost/** — runs in any modern browser on PC, tablet or phone. No install, no account, no personal data (progress is saved only in your browser).
+
+- **Source code:** https://github.com/gonutyun-sketch/sun-lunar-outpost
+- **For:** elementary and middle-school students · Korean / English (switch at any time)
+- **Run locally:** `npm install` then `npm run dev`, and open http://localhost:5173
 
 ## How to play
 1. Each shift, switch facilities on or off: Oxygen Recycling, Hydroponic Greenhouse, Radiation Shelter, Science Lab. The Main Habitat is always on.
@@ -17,7 +19,19 @@ An educational strategy game for elementary and middle-school students, with thr
 3. Build upgrades (Solar, Oxygen Recycler, Battery): pay energy now, gain from the next shift.
 4. Emergencies are forecast one shift ahead; when one arrives, choose one of two responses.
 5. Press **ADVANCE SHIFT** and read the shift report.
-6. Launch the rover for hands-on repair and science missions (keyboard WASD/arrows + E, or the on-screen joystick and action button on phones and tablets).
+6. Launch the rover for hands-on repair and science missions.
+
+**Controls**
+| | PC | Phone / tablet |
+|---|---|---|
+| Base | mouse: switches, upgrades, emergency choices, ADVANCE SHIFT | tap the same buttons |
+| Rover drive | WASD or arrow keys | left joystick |
+| Rover action | E (hold E to drill samples) | right round button (hold to drill) |
+| Pause / restart | Esc / R | ❚❚ button |
+| Circuit puzzle | click a tile, or 1–3 / ←→ + E | tap a yellow tile |
+| Pressure puzzle | 1–3 select, ↑/↓ (short taps) | ▲ / ▼ buttons |
+
+Rover battery (training values): sunlight barely drains it (the rover's solar deck trickle-charges while stopped), shadow drains it fast. The Mission 1 briefing shows a shadow shortcut and a sunny detour with estimated time and battery.
 
 **Difficulty** (chosen at New Game, saved with the mission):
 
