@@ -7,7 +7,8 @@ An educational 2D strategy game for students aged 12–18 (8–12 minutes per mi
 ![Mission screen](docs/screenshots/mission.jpg)
 
 ## Play
-- **Live demo:** _add the GitHub Pages / Netlify URL here after deployment_
+- **Source:** https://github.com/gonutyun-sketch/sun-lunar-outpost
+- **Live demo:** _GitHub Pages URL (https://gonutyun-sketch.github.io/sun-lunar-outpost/) once Pages is enabled with source "GitHub Actions"_
 - Locally: `npm install` then `npm run dev`, and open http://localhost:5173
 
 ## How to play

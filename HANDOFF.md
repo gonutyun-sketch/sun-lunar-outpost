@@ -65,6 +65,9 @@ Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(ba
 - Missions are step lists in ExploreScreen `MISSIONS` (kinds: goto, circuit, pickup, scan, pressure, collect, dock). Mission 3 (sampleSurvey) uses `collect` (hold E, DRILL_TIME) and `rewardResearch`. To add more missions: add an expedition in mission.json (fromShift, effect), a MissionDef with steps (e.g. a new `sample` kind), sites in world.ts, and `ex.*` keys in en.ts/ko.ts. Engine effects available: solarMult, oxygenMult, oxygenLeak, failEnergyCost, failOxygenCost; `expeditionLog` feeds the shift report.
 - Tuning: ROVER constants in src/rover/sim.ts; map in world.ts; `npx vitest run src/rover` prints route times/battery.
 
+## Repository
+- GitHub (public): https://github.com/gonutyun-sketch/sun-lunar-outpost — `origin`, branch `main`. Every push to main runs .github/workflows/deploy.yml (typecheck, tests, build, Pages deploy).
+
 ## Next tasks for the next AI
 1. After deployment: add URL to README, run a full playthrough on the live URL.
 2. Apply the team's difficulty decision (see PROGRESS.md "Balance findings") if any.

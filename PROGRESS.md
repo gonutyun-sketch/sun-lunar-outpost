@@ -104,7 +104,7 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Performance: only the visible terrain part is copied per frame; paused/briefing screens redraw at ~12 fps; dt capped at 50 ms (hidden tab / slow device never makes the rover jump); effects off or OS reduced-motion → no particles, shake, vibration or animated pulses.
 
 ## Remaining (priority order)
-1. **P0** Create GitHub repo, push, enable Pages (steps in HANDOFF.md) → public demo URL, add to README.
+1. **P0** Repo is public at https://github.com/gonutyun-sketch/sun-lunar-outpost (pushed 2026-11-14, full history). Remaining: enable Pages (Settings → Pages → Source: GitHub Actions), re-run the workflow, add the live URL to README.
 2. **P1** Team decision on difficulty (above). If changed: update mission.json + tests.
 3. **P1** Final submission: Space Apps project page, demo video, AI disclosure.
 4. **P2** Optional: sound, more scene detail.
