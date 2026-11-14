@@ -16,7 +16,9 @@ npm run build      # -> dist/
 
 ## Structure
 ```
-src/data/mission.json   All tunable numbers from GDD (resources, costs, shift illumination, events)
+src/data/mission.json   All tunable numbers from GDD (resources, costs, FICTIONAL shift scenarioModifier, events)
+src/data/site.json      NASA LRO/LOLA-derived site value + full provenance (do not edit without re-extracting)
+tools/extract-illumination.mjs  Reproducible NASA pixel extraction (HTTP Range); node tools/extract-illumination.mjs
 src/data/education.ts   Science briefing text (per shift + per facility)
 src/game/types.ts       Shared types
 src/game/config.ts      Loads mission.json as MissionConfig
@@ -31,7 +33,7 @@ src/App.tsx             Screen routing, effects toggle
 
 ## Rules (GDD v1.0)
 Per shift, in `simulateShift`:
-1. solar = round(30 × illumination[shift]) (float-safe rounding, .5 rounds up) → 27,24,17,8,11,20,29,18
+1. sunlight = min(1, site.averageSunlitFraction (0.88444, NASA) × scenarioModifier[shift] (fictional)); solar = round(30 × sunlight) (float-safe, .5 up) → 27,24,17,8,11,20,29,18
 2. available = min(100, battery + solar)
 3. demand = 12 (habitat) + oxygen 7 + greenhouse 6 + shelter 7 + lab 8 (enabled only)
 4. available < 12 → habitat power failure → mission FAILED ('power')
@@ -44,10 +46,11 @@ Per shift, in `simulateShift`:
 Score: survival 40 (success/partial) + 10/milestone + round(20·health/100) + round(10·min(battery,30)/30).
 
 ## Next tasks for the next AI
-1. Phase 4 NASA data (see PROGRESS.md). Suggested approach: keep `illumination` per shift as gameplay modifiers but add a site factor from a cited LOLA average-illumination product; formula becomes round(30 × siteFactor × modifier) or calibrate base output — update tests and How-to-Play accordingly.
-2. Write README.md; deploy; add screenshots.
+1. Phase 5 polish ONLY after team review (see PROGRESS.md).
+2. README.md, deploy (static dist/), screenshots, submission checklist.
 
 ## Cautions
 - Keep engine pure (no React imports). Any rule change → update engine tests.
-- Never present gameplay values as NASA-measured.
+- Never present gameplay values as NASA-measured. Only site.json averageSunlitFraction + nearbyComparisons are NASA-derived; UI marks them with the green NASA badge, everything else with the orange SCENARIO badge.
+- To change site: run the tool with new lat/lon, update site.json, re-check that solar values / balance tests still hold.
 - Never commit secrets/.env (already in .gitignore).

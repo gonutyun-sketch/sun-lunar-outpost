@@ -41,10 +41,20 @@ export function getShiftConfig(cfg: MissionConfig, shift: number): ShiftConfig {
   return s;
 }
 
-/** GDD §5: Solar generation = round(basePeakOutput × illumination factor). */
+/**
+ * Fraction of this shift with sunlight on the panels:
+ *   NASA LRO/LOLA long-term average sunlit fraction for the site (src/data/site.json)
+ *   × FICTIONAL training-scenario modifier for the shift, capped at 1.
+ */
+export function shiftSunlight(cfg: MissionConfig, shift: number): number {
+  const f = cfg.site.averageSunlitFraction * getShiftConfig(cfg, shift).scenarioModifier;
+  return Number(Math.min(1, f).toFixed(4));
+}
+
+/** GDD §5: Solar generation = round(basePeakOutput × shift sunlight fraction). */
 export function solarGeneration(cfg: MissionConfig, shift: number): number {
   // toFixed guards against binary float error (e.g. 30 × 0.35 = 10.4999…) so .5 always rounds up.
-  return Math.round(Number((cfg.solar.basePeakOutput * getShiftConfig(cfg, shift).illumination).toFixed(6)));
+  return Math.round(Number((cfg.solar.basePeakOutput * shiftSunlight(cfg, shift)).toFixed(6)));
 }
 
 export function facilityCost(cfg: MissionConfig, id: FacilityId): number {
@@ -83,10 +93,11 @@ export function simulateShift(
 
   // 1–2. Solar production, charge battery up to capacity.
   const solar = solarGeneration(cfg, shift);
+  const sunlight = shiftSunlight(cfg, shift);
   const available = Math.min(cap.energy, before.energy + solar);
   const wasted = before.energy + solar - available;
   explanations.push(
-    `Solar panels generated ${solar} energy (illumination ×${sc.illumination.toFixed(2)})` +
+    `Solar panels generated ${solar} energy (sunlight for ${Math.round(sunlight * 100)}% of the shift)` +
       (wasted > 0 ? `; ${wasted} was lost because the battery was full.` : '.'),
   );
 
@@ -144,7 +155,8 @@ export function simulateShift(
 
   return {
     shift,
-    illumination: sc.illumination,
+    illumination: sunlight,
+    scenarioModifier: sc.scenarioModifier,
     solar,
     available,
     demand,

@@ -123,11 +123,16 @@ export function MissionScreen({ state, setState, onFinish, onQuit, fx, onToggleF
       {/* ---------- Center ---------- */}
       <div className="mission-main">
         <div className="scene-wrap panel">
-          <BaseScene facilities={state.facilities} illumination={sc.illumination} radiation={sc.event === 'radiation'} shift={state.shift} />
+          <BaseScene facilities={state.facilities} illumination={outcome.illumination} radiation={sc.event === 'radiation'} shift={state.shift} />
           <div className="scene-overlay">
             <div className="chip">
               <span className="k">Solar this shift</span>
-              <strong style={{ color: '#F4CA65' }}>+{outcome.solar}</strong> energy · illumination ×{sc.illumination.toFixed(2)}
+              <strong style={{ color: '#F4CA65' }}>+{outcome.solar}</strong> energy · sunlit {Math.round(outcome.illumination * 100)}% of shift
+              <div className="sun-calc">
+                <span className="badge-data measured" title={MISSION.site.source.product}>NASA LOLA</span> site avg {Math.round(MISSION.site.averageSunlitFraction * 100)}%
+                {' × '}
+                <span className="badge-data game">SCENARIO</span> ×{sc.scenarioModifier.toFixed(2)}
+              </div>
             </div>
             <div className="chip">
               <span className="k">Next-shift outlook</span>

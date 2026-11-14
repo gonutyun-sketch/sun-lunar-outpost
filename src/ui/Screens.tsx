@@ -102,6 +102,7 @@ export function HowToPlay({ onBack, onStart }: { onBack: () => void; onStart: ()
       <section className="panel">
         <h2>POWER</h2>
         <p>Solar panels charge the battery (max {MISSION.capacity.energy}) at the start of each shift, then all running systems draw from it. Sunlight changes from shift to shift, so save energy before dark periods.</p>
+        <p>The base sits on a real ridge near Shackleton crater. NASA LRO/LOLA data show it is sunlit about {Math.round(MISSION.site.averageSunlitFraction * 100)}% of the time on average. Each shift multiplies that average by a fictional scenario modifier. See Science &amp; Credits.</p>
       </section>
       <section className="panel">
         <h2>WIN &amp; LOSE</h2>
@@ -118,6 +119,7 @@ export function HowToPlay({ onBack, onStart }: { onBack: () => void; onStart: ()
 
 /* ---------------- Science & credits ---------------- */
 export function Credits({ onBack }: { onBack: () => void }) {
+  const site = MISSION.site;
   return (
     <div className="screen info-page">
       <header>
@@ -125,17 +127,66 @@ export function Credits({ onBack }: { onBack: () => void }) {
         <button className="btn" onClick={onBack}>Back</button>
       </header>
       <section className="panel">
-        <h2>DATA IN THIS GAME</h2>
+        <h2>WHERE IS SUN-01?</h2>
+        <p>
+          SUN-01 is a fictional base placed at a real location: <b>{site.name}</b>, at{' '}
+          <b>{Math.abs(site.latitude).toFixed(4)}°S, {Math.abs(site.longitude).toFixed(4)}°W</b> ({site.longitudeNote}).
+        </p>
+        <p>
+          <span className="badge-data measured">NASA LRO/LOLA-DERIVED</span>{' '}
+          Over an 18.6-year lunar cycle, this spot is sunlit <b>{(site.averageSunlitFraction * 100).toFixed(1)}%</b> of the time
+          (value {site.averageSunlitFraction}, from the NASA illumination map). It has the highest value in that map
+          of the region from 85°S to the pole.
+        </p>
+        <table>
+          <thead><tr><th>Location (same NASA map)</th><th>Average time sunlit</th></tr></thead>
+          <tbody>
+            <tr><td>SUN-01 site pixel (60 m)</td><td>{(site.averageSunlitFraction * 100).toFixed(1)}%</td></tr>
+            {site.nearbyComparisons.map((c) => (
+              <tr key={c.label}><td>{c.label}</td><td>{(c.value * 100).toFixed(1)}%{c.value === 0 ? ' (permanent shadow)' : ''}</td></tr>
+            ))}
+          </tbody>
+        </table>
+        <p>
+          A few hundred metres can matter enormously: on the ridge crest the Sun is almost always visible, but crater
+          floors nearby never see direct sunlight at all. They are among the coldest places in the Solar System and
+          may trap water ice.
+        </p>
+      </section>
+      <section className="panel">
+        <h2>HOW THE GAME USES THE DATA</h2>
+        <p className="formula">sunlight(shift) = min(1, NASA site average {site.averageSunlitFraction} × scenario modifier)<br />solar energy = round(30 × sunlight)</p>
         <p>
           <span className="badge-data game">GAMEPLAY SCENARIO</span>{' '}
-          Shift illumination modifiers (×0.25 – ×0.95), radiation events, facility costs and all resource units are
-          simplified training values. They are <b>not</b> measured NASA data and are not forecasts for any real date.
+          The per-shift modifiers ({Math.min(...MISSION.shifts.map((s) => s.scenarioModifier)).toFixed(2)}–
+          {Math.max(...MISSION.shifts.map((s) => s.scenarioModifier)).toFixed(2)}), the radiation events, facility
+          costs and all resource units are <b>fictional training values</b>. They are not NASA observations or
+          forecasts for any real date. The scenario is a darker-than-average stretch: average sunlight across the 8
+          shifts is about {Math.round((MISSION.shifts.reduce((a, s) => a + s.scenarioModifier, 0) / MISSION.shifts.length) * site.averageSunlitFraction * 100)}%,
+          compared with the site’s long-term {Math.round(site.averageSunlitFraction * 100)}%.
         </p>
-        <p>
-          <span className="badge-data measured">NASA SOURCE</span>{' '}
-          Site illumination calibration from NASA Lunar Reconnaissance Orbiter (LOLA) polar illumination products is
-          being integrated. Until it is verified, no value in the game is labelled as NASA-measured.
-        </p>
+      </section>
+      <section className="panel">
+        <h2>DATASET, UNITS &amp; METHOD</h2>
+        <ul className="src-list">
+          <li><b>Product:</b> {site.source.product}</li>
+          <li><b>Producer:</b> {site.source.provider}</li>
+          <li><b>Units:</b> {site.units}</li>
+          <li><b>Extraction:</b> {site.extraction}</li>
+          <li><b>Extracted:</b> {site.extractedOn}. The script is in the repository at tools/extract-illumination.mjs.</li>
+        </ul>
+        <h2 style={{ marginTop: 14 }}>LIMITATIONS</h2>
+        <ul className="src-list">{site.limitations.map((l) => <li key={l}>{l}</li>)}</ul>
+      </section>
+      <section className="panel">
+        <h2>SOURCES</h2>
+        <ul className="src-list">
+          <li>{site.source.citation}</li>
+          <li>NASA GSFC PGDA, “Lunar Polar Illumination”: <a href={site.source.productPage} target="_blank" rel="noreferrer">{site.source.productPage}</a></li>
+          <li>Data file: <a href={site.source.dataUrl} target="_blank" rel="noreferrer">{site.source.dataUrl}</a> (label: <a href={site.source.labelUrl} target="_blank" rel="noreferrer">.LBL</a>)</li>
+          <li>Projection equations: <a href={site.source.projectionReference} target="_blank" rel="noreferrer">LOLA PDS DSMAP_POLAR.CAT</a></li>
+          <li>{site.source.visualization}. This is a visual reference for how sunlight changes over time; no numbers were taken from it.</li>
+        </ul>
       </section>
       <section className="panel">
         <h2>TEAM</h2>

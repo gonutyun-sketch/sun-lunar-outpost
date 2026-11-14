@@ -15,11 +15,39 @@ export type ShiftEvent = 'warning' | 'radiation';
 
 export interface ShiftConfig {
   shift: number;
-  illumination: number;
+  /** FICTIONAL training-scenario multiplier applied to the NASA site average. */
+  scenarioModifier: number;
   event?: ShiftEvent;
 }
 
+/** NASA LRO/LOLA-derived site record (src/data/site.json). */
+export interface SiteData {
+  name: string;
+  baseLabel: string;
+  latitude: number;
+  longitude: number;
+  longitudeNote: string;
+  averageSunlitFraction: number;
+  rawDN: number;
+  nearbyComparisons: { label: string; value: number }[];
+  source: {
+    provider: string;
+    product: string;
+    productPage: string;
+    dataUrl: string;
+    labelUrl: string;
+    projectionReference: string;
+    citation: string;
+    visualization: string;
+  };
+  units: string;
+  extraction: string;
+  limitations: string[];
+  extractedOn: string;
+}
+
 export interface MissionConfig {
+  site: SiteData;
   missionName: string;
   totalShifts: number;
   initial: Resources;
@@ -51,7 +79,9 @@ export interface Warning {
 /** Result of simulating one shift with the current switches (used for both preview and execution). */
 export interface ShiftOutcome {
   shift: number;
+  /** Fraction of the shift with sunlight = min(1, site average × scenario modifier). */
   illumination: number;
+  scenarioModifier: number;
   solar: number;
   /** Battery after solar charging (capped at capacity), before any demand. */
   available: number;

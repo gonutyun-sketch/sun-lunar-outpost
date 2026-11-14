@@ -1,0 +1,33 @@
+{
+  "id": "sun01-site",
+  "name": "a sunlit ridge near Shackleton crater, lunar South Pole",
+  "baseLabel": "SUN-01 (fictional base placed at a real location)",
+  "latitude": -89.4749,
+  "longitude": -137.4431,
+  "longitudeNote": "= 222.5569°E, planetocentric",
+  "averageSunlitFraction": 0.88444,
+  "rawDN": 22111,
+  "nearbyComparisons": [
+    { "label": "300 m × 300 m area around the site (5×5 pixels, mean)", "value": 0.5536 },
+    { "label": "Shackleton crater floor, 89.67°S 129.78°E (5×5 pixels, mean)", "value": 0 }
+  ],
+  "source": {
+    "provider": "NASA Goddard Space Flight Center — Planetary Geology, Geophysics and Geochemistry Lab (PGDA), LRO/LOLA team",
+    "product": "AVGVISIB_85S_060M_201608 (Average solar illumination, 85°S–90°S, 60 m/px), PDS dataset LRO-L-LOLA-4-GDR-V1.0, product version V1.05",
+    "productPage": "https://pgda.gsfc.nasa.gov/products/69",
+    "dataUrl": "http://imbrium.mit.edu/EXTRAS/ILLUMINATION/IMG/AVGVISIB_85S_060M_201608.IMG",
+    "labelUrl": "http://imbrium.mit.edu/EXTRAS/ILLUMINATION/IMG/AVGVISIB_85S_060M_201608.LBL",
+    "projectionReference": "http://imbrium.mit.edu/CATALOG/DSMAP_POLAR.CAT",
+    "citation": "Mazarico, E., Neumann, G.A., Smith, D.E., Zuber, M.T., Torrence, M.H. (2011). Illumination conditions of the lunar polar regions using LOLA topography. Icarus 211, 1066–1081. doi:10.1016/j.icarus.2010.10.030",
+    "visualization": "NASA Scientific Visualization Studio, 'Illumination at the Moon's South Pole, 2023 to 2030' (ID 4930), https://svs.gsfc.nasa.gov/4930"
+  },
+  "units": "Dimensionless fraction 0–1: share of hourly time steps over an 18.6-year lunar nutation cycle in which the pixel was lit by any part of the solar disc. value = DN × 0.00004.",
+  "extraction": "tools/extract-illumination.mjs: lat/lon converted to line/sample with the polar stereographic equations in DSMAP_POLAR.CAT (sphere 1737.4 km, 60 m/px, 5058×5058); only the needed image rows were read via HTTP Range requests. Map orientation was verified: five known permanently shadowed crater floors (Shackleton, Shoemaker, Faustini, Haworth, de Gerlache) read ≈0, while 3 of 4 longitude-mirrored control points read 0.17–0.35 (the 4th also fell in shadow). The site pixel equals the product's DERIVED_MAXIMUM (DN 22111), i.e. this pixel has the highest value in the map (ties possible).",
+  "limitations": [
+    "Long-term average at the surface; panels on masts would see more sunlight.",
+    "'Sunlit' counts any visible fraction of the solar disc, so it is not the same as full panel output.",
+    "One 60 m pixel on a narrow ridge crest; the surrounding 300 m area averages much lower (0.55).",
+    "It is not a forecast for any specific date."
+  ],
+  "extractedOn": "2026-11-14"
+}

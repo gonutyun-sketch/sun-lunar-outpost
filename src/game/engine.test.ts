@@ -7,6 +7,7 @@ import {
   createInitialState,
   projectCurrentShift,
   simulateShift,
+  shiftSunlight,
   solarGeneration,
   toggleFacility,
 } from './engine';
@@ -172,5 +173,34 @@ describe('computeScore', () => {
       resources: { energy: 0, oxygen: 0, food: 0, health: 0, research: 0 },
     };
     expect(computeScore(f, MISSION).total).toBe(0);
+  });
+});
+
+describe('NASA site data integration', () => {
+  it('site value equals DN × label scaling factor (0.00004)', () => {
+    expect(MISSION.site.rawDN * 0.00004).toBeCloseTo(MISSION.site.averageSunlitFraction, 6);
+    expect(MISSION.site.averageSunlitFraction).toBeGreaterThan(0);
+    expect(MISSION.site.averageSunlitFraction).toBeLessThanOrEqual(1);
+  });
+
+  it('cites the PGDA product, data file and Mazarico et al. 2011', () => {
+    expect(MISSION.site.source.productPage).toBe('https://pgda.gsfc.nasa.gov/products/69');
+    expect(MISSION.site.source.dataUrl).toContain('AVGVISIB_85S_060M_201608.IMG');
+    expect(MISSION.site.source.citation).toContain('10.1016/j.icarus.2010.10.030');
+  });
+
+  it('shift sunlight = min(1, site average × scenario modifier)', () => {
+    for (const s of MISSION.shifts) {
+      const f = shiftSunlight(MISSION, s.shift);
+      expect(f).toBeCloseTo(Math.min(1, MISSION.site.averageSunlitFraction * s.scenarioModifier), 4);
+      expect(f).toBeGreaterThanOrEqual(0);
+      expect(f).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('solar output follows the site value (changing the site changes power)', () => {
+    const darker = { ...MISSION, site: { ...MISSION.site, averageSunlitFraction: 0.5 } };
+    expect(solarGeneration(darker, 1)).toBe(Math.round(30 * 0.5 * 1.02));
+    expect(solarGeneration(darker, 1)).toBeLessThan(solarGeneration(MISSION, 1));
   });
 });

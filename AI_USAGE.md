@@ -15,8 +15,9 @@
 - Review and approval of all AI output.
 
 ## Data sources
-- All gameplay numbers come from the team's GDD and are simplified game units.
-- NASA data integration (LRO/LOLA illumination) is pending; see PROGRESS.md. No value is labelled NASA-measured until verified against the cited product.
+- Gameplay numbers (costs, consumption, radiation events, per-shift scenario modifiers) come from the team's GDD and are fictional training values.
+- **NASA data:** one value (0.88444 average sunlit fraction) and two comparison values were extracted by an AI-written script (tools/extract-illumination.mjs) directly from the NASA LRO/LOLA PDS product AVGVISIB_85S_060M_201608 (https://pgda.gsfc.nasa.gov/products/69). The AI did not invent or estimate these numbers; they are read from the data file and can be re-run by anyone. Map orientation was checked against known permanently shadowed craters. Citation: Mazarico et al. (2011), Icarus 211, 1066–1081.
+- AI choices the team should review: the site coordinate (chosen as the map's highest-value pixel), the cautious site name, and the scenario modifiers (chosen so existing game balance is unchanged).
 
 ## Third-party assets
 - Fonts: Orbitron, Inter (SIL Open Font License) via Google Fonts.

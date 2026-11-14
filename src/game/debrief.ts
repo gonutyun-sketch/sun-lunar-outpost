@@ -1,5 +1,5 @@
 /** Pure helpers that turn a finished mission into educational observations (GDD §9, §10). */
-import { FAIL_MESSAGES } from './engine';
+import { FAIL_MESSAGES, shiftSunlight } from './engine';
 import type { GameState, MissionConfig } from './types';
 
 export function missionTitle(state: GameState): string {
@@ -27,9 +27,10 @@ export function takeaways(state: GameState, cfg: MissionConfig): string[] {
     out.push(FAIL_MESSAGES[state.failReason].lesson);
   } else {
     const minBattery = h.length ? Math.min(...h.map((r) => r.after.energy)) : state.resources.energy;
-    const darkest = [...cfg.shifts].sort((a, b) => a.illumination - b.illumination)[0];
+    const darkest = [...cfg.shifts].sort((a, b) => a.scenarioModifier - b.scenarioModifier)[0];
+    const pct = Math.round(shiftSunlight(cfg, darkest.shift) * 100);
     out.push(
-      `Your battery dropped as low as ${minBattery}. The darkest period (Shift ${darkest.shift}, illumination ×${darkest.illumination}) shows why polar bases need energy storage: near the lunar South Pole, the Sun stays low and terrain casts long shadows.`,
+      `Your battery dropped as low as ${minBattery}. Even at one of the best-lit spots at the South Pole (sunlit ${Math.round(cfg.site.averageSunlitFraction * 100)}% of the time on average, NASA LRO/LOLA), the dark period in Shift ${darkest.shift} (${pct}% sunlight) shows why polar bases need energy storage.`,
     );
   }
 
