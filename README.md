@@ -14,6 +14,11 @@ An educational strategy game for elementary and middle-school students, with thr
 - **Run locally:** `npm install` then `npm run dev`, and open http://localhost:5173
 
 ## How to play
+
+For a first mission, pick a difficulty and choose **Start with the guide**. The pixel astronaut takes you through the resource meters, real facility switches, a shift forecast, and the first shift report. Follow the guide again when your first rover sortie becomes available. Upgrade, emergency and research tips appear when those actions are available. You can pause or skip the guide.
+
+**Practice tutorial** in the main menu and **How to Play** opens an Easy practice mission without overwriting your save. Your regular mission saves the guide step with its base checkpoint. If you leave during a rover sortie, Continue resumes at the base and remembers the rover skills you already tried.
+
 1. Each shift, switch facilities on or off: Oxygen Recycling, Hydroponic Greenhouse, Radiation Shelter, Science Lab. The Main Habitat is always on.
 2. Check the power budget. Solar panels charge the battery first, and then every running system draws from it.
 3. Build upgrades (Solar, Oxygen Recycler, Battery): pay energy now, gain from the next shift.

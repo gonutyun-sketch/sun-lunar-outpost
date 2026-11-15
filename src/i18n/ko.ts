@@ -4,6 +4,7 @@
  */
 import type { en } from './en';
 import { koLearn } from './ko.learn';
+import { koTutorial } from './ko.tutorial';
 
 export const ko: Record<keyof typeof en, string> = {
   // 언어 전환
@@ -598,4 +599,5 @@ export const ko: Record<keyof typeof en, string> = {
   'ex.touch.rotate': "팁: 가로 화면에서 지형이 더 넓게 보입니다 (세로도 플레이 가능).",
   'ex.close': "닫기",
   ...koLearn,
+  ...koTutorial,
 };

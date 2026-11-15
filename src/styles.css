@@ -74,13 +74,11 @@ h1, h2, h3 { font-family: var(--display); letter-spacing: 0.04em; margin: 0; }
   color: var(--muted);
 }
 
-/* ---------- Starfield / menu ---------- */
-.starfield { position: fixed; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
-.starfield svg { width: 100%; height: 100%; }
-.twinkle { animation: twinkle 4s ease-in-out infinite; }
-@keyframes twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
-.moon-drift { animation: drift 40s ease-in-out infinite alternate; transform-origin: center; }
-@keyframes drift { from { transform: translateY(0); } to { transform: translateY(-14px); } }
+/* ---------- Lunar backdrop / menu ---------- */
+.lunar-backdrop {
+  position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  display: block; pointer-events: none; z-index: 0; image-rendering: pixelated;
+}
 
 .screen { position: relative; z-index: 1; min-height: 100%; }
 .menu {
@@ -496,7 +494,8 @@ html[lang='ko'] h1, html[lang='ko'] h2 { letter-spacing: 0.01em; }
 .ex-prompt { text-align: center; font-weight: 700; color: var(--green); opacity: 0; transition: opacity 0.15s; }
 .ex-prompt.show { opacity: 1; animation: blink 1.2s ease-in-out infinite; }
 .ex-prompt:not(.show):not(:empty) { opacity: 1; color: var(--muted); }
-.ex-warn b { color: #9fb6e0; } .ex-warn b.crit { color: var(--red); animation: blink 0.9s ease-in-out infinite; }
+.ex-warn { min-height: calc(1lh + 6px); }
+.ex-warn b { color: #9fb6e0; } .ex-warn b.crit { color: var(--red); }
 /* circuit puzzle */
 .circuit { width: 100%; max-width: 400px; margin: 8px auto; display: block; }
 .cz-tile .cz-board { stroke-width: 2; }
@@ -752,15 +751,11 @@ html.touch button, html.touch .gauge, html.touch .cz-tile { touch-action: manipu
 @keyframes cz-current { to { stroke-dashoffset: -14; } }
 .circuit.solved { animation: cz-solved 0.9s ease 2; }
 @keyframes cz-solved { 50% { filter: drop-shadow(0 0 14px rgba(86, 199, 242, 0.9)); } }
-/* Battery HUD: blink when critical */
-.ex-battery.crit { animation: bat-crit 0.7s steps(2, jump-none) infinite; }
-@keyframes bat-crit { 50% { box-shadow: inset 0 0 0 2px var(--red), 0 0 18px rgba(255, 107, 122, 0.45); } }
 /* Joystick: larger invisible hit area so a thumb that lands near the stick still grabs it */
 .touch-stick::before { content: ""; position: absolute; inset: -26px; border-radius: 50%; }
 @media (prefers-reduced-motion: reduce) {
   .cz-flow line, .cz-flow-wire { animation: none; stroke-dasharray: none; opacity: 0.6; }
-  .circuit.solved, .ex-battery.crit { animation: none; }
-  .ex-battery.crit { box-shadow: inset 0 0 0 2px var(--red); }
+  .circuit.solved { animation: none; }
 }
 
 /* Lunar flight controls */
@@ -881,26 +876,26 @@ html.touch button, html.touch .gauge, html.touch .cz-tile { touch-action: manipu
 @keyframes warning-in { from { opacity: 0; translate: 0 -8px; } to { opacity: 1; translate: 0 0; } }
 
 /* Stepped frames are visual only. Buttons keep their rectangular keyboard and touch targets. */
-:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn {
+:is(.menu-buttons, .advance, .ex-actions, .results-actions, .header-actions:where(.info-terminal *)) .btn {
   --button-frame: #5e718b;
   --button-face: #202d45;
   position: relative; isolation: isolate; border-color: transparent; background: transparent; box-shadow: none;
 }
-:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn::before,
-:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn::after {
+:is(.menu-buttons, .advance, .ex-actions, .results-actions, .header-actions:where(.info-terminal *)) .btn::before,
+:is(.menu-buttons, .advance, .ex-actions, .results-actions, .header-actions:where(.info-terminal *)) .btn::after {
   content: ""; position: absolute; z-index: -1; clip-path: var(--pixel-corners); pointer-events: none;
 }
-:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn::before { inset: 0; background: var(--button-frame); }
-:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn::after {
+:is(.menu-buttons, .advance, .ex-actions, .results-actions, .header-actions:where(.info-terminal *)) .btn::before { inset: 0; background: var(--button-frame); }
+:is(.menu-buttons, .advance, .ex-actions, .results-actions, .header-actions:where(.info-terminal *)) .btn::after {
   inset: 1px 1px 3px; background: var(--button-face); box-shadow: inset 0 2px #ffffff19;
 }
-:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn:hover:not(:disabled) {
+:is(.menu-buttons, .advance, .ex-actions, .results-actions, .header-actions:where(.info-terminal *)) .btn:hover:not(:disabled) {
   --button-frame: #a6bacf; --button-face: #2b3f59; background: transparent; border-color: transparent;
 }
-:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn-primary {
+:is(.menu-buttons, .advance, .ex-actions, .results-actions, .header-actions:where(.info-terminal *)) .btn-primary {
   --button-frame: #aee0e8; --button-face: #81cada; color: #101a2b;
 }
-:is(.menu-buttons, .advance, .ex-actions, .results-actions) .btn-primary:hover:not(:disabled) {
+:is(.menu-buttons, .advance, .ex-actions, .results-actions, .header-actions:where(.info-terminal *)) .btn-primary:hover:not(:disabled) {
   --button-frame: #d2f0f3; --button-face: #a9dfeb;
 }
 :is(.menu-buttons, .advance) .btn-primary {
@@ -941,7 +936,7 @@ html.touch button, html.touch .gauge, html.touch .cz-tile { touch-action: manipu
 .ex-distance { display: inline-block; color: #e6eef2; font: 700 12px/1.2 ui-monospace, monospace; padding: 2px 5px; margin-inline-start: 7px; border: 1px solid #5d6478; background: #202a3e; white-space: nowrap; }
 .ex-obj:empty::before, .ex-progress-short { display: none; }
 .ex-battery { background: #101929; border: 1px solid #526078; padding: 5px 8px; }
-.ex-battery.crit { box-shadow: inset 0 0 0 1px var(--red); }
+.ex-battery.crit { box-shadow: inset 0 0 0 2px var(--red); }
 .ex-step { background: #141d2e; border-color: #42536c; }
 .ex-step.now { background: #353229; border-color: #a68b55; }
 .ex-scenario { border-radius: 2px; color: #d3deed; background: #141b2ae8; }
@@ -1238,4 +1233,193 @@ html.touch .coach-close, html.touch .qa-go { min-height: 44px; min-width: 44px; 
 @media (max-width: 560px), (max-height: 500px) {
   .ex-route { grid-template-columns: 1fr; }
   .ex-route-map { max-width: 240px; }
+}
+
+/* Guided tutorial */
+.menu-buttons .menu-practice { grid-column: 1 / -1; color: #c6e6ef; }
+.tutorial-start { max-width: 690px; }
+.tutorial-start > header { gap: 8px; }
+.tutorial-start .header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.tutorial-start section.tutorial-start-card {
+  display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: center; gap: 16px;
+  padding: clamp(16px, 4vw, 34px); border-color: #7793a9;
+  box-shadow: 5px 5px #090e19;
+  background: linear-gradient(125deg, #24344c, #141e30 65%);
+}
+.tutorial-start-card > .tutorial-astronaut { width: 96px; }
+.tutorial-start-card h1 { font-size: clamp(18px, 4vw, 26px); line-height: 1.24; }
+.tutorial-start-card p { margin: 8px 0; }
+.tutorial-start-card small { color: var(--yellow); }
+.tutorial-start-actions { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+.tutorial-start-actions .btn { min-height: 44px; }
+.tutorial-practice-tag { align-self: flex-start; color: var(--yellow); font-size: 11px; }
+
+.tutorial-guide {
+  position: relative; isolation: isolate;
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 8px 12px;
+  padding: 8px 12px; border: 1px solid #6f899e;
+  background: linear-gradient(105deg, #22354c, #111e30 76%);
+  color: #edf6fb; text-align: left;
+  box-shadow: 3px 3px #080d18c7, inset 3px 0 #83b7ce;
+  animation: guide-in 0.14s ease-out;
+}
+.tutorial-guide.mood-happy { box-shadow: 3px 3px #080d18c7, inset 3px 0 #9bdfbd; }
+.tutorial-guide.mood-caution { box-shadow: 3px 3px #080d18c7, inset 3px 0 #ffc27f; }
+@keyframes guide-in { from { opacity: 0; } to { opacity: 1; } }
+.tutorial-astronaut { display: block; width: 100%; height: auto; aspect-ratio: 1; image-rendering: crisp-edges; image-rendering: pixelated; }
+.tutorial-copy { min-width: 0; }
+.tutorial-copy::before { position: absolute; left: 62px; top: 50%; width: 4px; height: 6px; background: #83b7ce; content: ""; }
+.tutorial-meta { color: #bcd9ed; font-size: 10px; font-weight: 700; letter-spacing: .07em; }
+.tutorial-meta > span { display: inline-block; min-width: 15px; color: #face86; }
+.mood-happy .tutorial-meta > span { color: #b7f5d5; }
+.tutorial-copy strong { display: block; font-size: 14px; line-height: 1.28; }
+.tutorial-guide .tutorial-copy p { margin: 2px 0 0; color: #d8e2ed; font-size: 12.5px; line-height: 1.37; }
+.tutorial-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 3px 6px; }
+.tutorial-actions .tutorial-action { min-height: 36px; padding: 6px 10px; background: #253d55; border-color: #8eacbd; font-size: 12px; }
+.tutorial-link { background: transparent; border: 1px solid transparent; color: #bccbda; padding: 5px; font-size: 11px; min-height: 36px; }
+.tutorial-link:hover { border-color: #56758b; color: #f2f8fc; }
+.tutorial-spot-layer { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+.tutorial-spot {
+  position: absolute; pointer-events: none; border: 2px solid #ffdb8f;
+  box-shadow: 0 0 0 2px #101725b3, inset 0 0 0 1px #513c24b3;
+}
+.tutorial-spot i {
+  position: absolute; left: 7px; top: -12px; width: 11px; height: 9px;
+  background: #ffdb8f; clip-path: polygon(0 0, 100% 0, 100% 30%, 80% 30%, 80% 60%, 62% 60%, 62% 100%, 38% 100%, 38% 60%, 20% 60%, 20% 30%, 0 30%);
+}
+.stat[role="button"] { cursor: pointer; }
+.tutorial-base-slot { position: relative; z-index: 4; }
+.tutorial-base-slot .tutorial-guide { max-width: 870px; }
+.mission-guided { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.mission-guided .outpost-view { position: relative; }
+.mission-guided .outpost-view::after { position: absolute; inset: 0; content: ""; background: #060c1726; pointer-events: none; }
+.modal .tutorial-guide { margin: 8px 0; }
+.ex-heading { display: grid; gap: 6px; min-width: 0; }
+.tutorial-rover-options { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.tutorial-rover-options .btn, .tutorial-resume-rover { font-size: 12px; padding: 6px 10px; }
+.tutorial-resume-rover { justify-self: end; }
+.tutorial-rover-lang { display: inline-flex; }
+.tutorial-circuit .tutorial-guide { grid-template-columns: 40px minmax(0, 1fr); gap: 4px 7px; margin-top: 5px; }
+.tutorial-circuit .tutorial-copy::before { display: none; }
+.tutorial-circuit .tutorial-actions { grid-column: 2; }
+.tutorial-circuit .circuit { width: min(100%, 280px); margin-block: 5px; }
+.ex-card.win .tutorial-guide { margin: 8px 0; }
+
+@media (max-width: 1100px) {
+  .tutorial-base-slot { position: sticky; top: max(4px, env(safe-area-inset-top)); z-index: 31; }
+}
+@media (max-width: 640px) {
+  .tutorial-guide { grid-template-columns: 36px minmax(0, 1fr); gap: 3px 8px; padding: 7px 9px; }
+  .tutorial-actions, .tutorial-circuit .tutorial-actions { grid-column: 1 / -1; }
+  .tutorial-guide .tutorial-copy p { font-size: 12px; }
+  .tutorial-copy::before { display: none; }
+  .tutorial-circuit .circuit { width: min(100%, 248px); }
+}
+@media (max-width: 400px) {
+  .tutorial-start section.tutorial-start-card { grid-template-columns: 64px minmax(0, 1fr); gap: 12px; }
+  .tutorial-start-card > .tutorial-astronaut { width: 64px; }
+  .tutorial-start-actions { flex-direction: column; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .tutorial-guide { grid-template-columns: 34px minmax(0, 1fr) auto; padding-block: 4px; }
+  .tutorial-copy::before { display: none; }
+  .tutorial-circuit .tutorial-guide { grid-template-columns: 34px minmax(0, 1fr); }
+  .tutorial-circuit .tutorial-actions { grid-column: 1 / -1; }
+  .ex-card.puzzle.tutorial-circuit { width: min(620px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) minmax(215px, 47%); align-items: center; gap: 2px 12px; }
+  .tutorial-circuit h2 { grid-column: 1 / -1; }
+  .ex-card.puzzle.tutorial-circuit .circuit { grid-column: 2; grid-row: 2 / span 3; width: 100%; height: 166px; max-height: none; }
+  .tutorial-circuit .ex-tip, .tutorial-circuit .ex-flash { grid-column: 1; }
+}
+@media (pointer: coarse) {
+  .tutorial-link, .tutorial-actions .tutorial-action { min-height: 44px; }
+}
+html.touch .tutorial-link, html.touch .tutorial-actions .tutorial-action { min-height: 44px; }
+@media (prefers-reduced-motion: reduce) { .tutorial-guide { animation: none; } }
+
+/* Pixel frames shared by expedition hardware and information terminals. */
+:is(.ex-top, .ex-bottom, .ex-controls, .ex-card, .rover-menu, .info-terminal > header, .info-terminal > .panel) {
+  --frame-accent: #75a8bf;
+  border: 1px solid #536780; border-radius: 0;
+  background-color: #152135;
+  background-image: linear-gradient(var(--frame-accent), var(--frame-accent)), linear-gradient(var(--frame-accent), var(--frame-accent)),
+    linear-gradient(#526881, #526881), linear-gradient(#526881, #526881);
+  background-position: left 2px top 2px, left 2px top 2px, right 2px bottom 2px, right 2px bottom 2px;
+  background-size: 14px 2px, 2px 9px, 12px 2px, 2px 8px;
+  background-repeat: no-repeat;
+  box-shadow: 3px 3px #080d18c7, inset 0 0 0 2px #101a2a;
+}
+.ex-view { border: 2px solid #465b75; border-radius: 0; box-shadow: 3px 3px #080d18c7; }
+.ex-top { --frame-accent: #80c2d6; }
+.ex-mission .tag { color: #a1c8db; }
+.ex-obj:not(:empty)::before {
+  content: ""; display: inline-block; margin-right: 5px; vertical-align: 1px;
+  width: 7px; height: 8px; background: currentColor;
+  clip-path: polygon(0 0, 2px 0, 2px 2px, 4px 2px, 4px 3px, 7px 3px, 7px 5px, 4px 5px, 4px 6px, 2px 6px, 2px 8px, 0 8px);
+}
+.ex-step { border-radius: 0; border-left-width: 3px; line-height: 1.27; }
+.ex-step.now { color: #ffe0a0; }
+.ex-step.done { color: #a6e5c9; }
+.ex-battery { background: #0f192a; border-color: #648097; border-radius: 0; box-shadow: inset 0 2px #243953; }
+.ex-battery .bar { border-color: #485870; }
+.ex-battery .bar > i { background: #f0c779; box-shadow: inset 0 2px #ffebaf9e, inset 0 -2px #935f28; }
+.ex-battery.low .bar > i { background: var(--red); box-shadow: inset 0 2px #ffd2d5ad, inset 0 -2px #9e3f52; }
+.ex-scenario, .ex-toast { border-radius: 0; box-shadow: 2px 2px #0a111f; }
+.ex-scenario { border-left: 2px solid #a3b5cc; }
+.ex-toast { max-width: calc(100% - 24px); border-left-width: 3px; background: #142633; }
+.ex-prompt:not(:empty), .ex-warn:not(:empty) { padding: 3px 5px; background: #0e1929; }
+.ex-prompt.show { border-left: 2px solid #72c9aa; animation: none; }
+.ex-warn:not(:empty) { border-left: 2px solid #b48c5b; }
+.ex-card { background-color: #162338; }
+.ex-card .badge-data { border: 1px solid currentColor; border-radius: 0; }
+.ex-card.win { --frame-accent: #9be0bf; border-color: #81c4a8; box-shadow: 4px 4px #080d18c7, inset 0 0 0 2px #101a2a; }
+.ex-card.lose { --frame-accent: #ff8d99; border-color: #a75e6d; }
+.ex-card.puzzle {
+  --frame-accent: #e6be78; border-color: #927953;
+  box-shadow: 4px 4px #080d18c7, inset 0 0 0 2px #111b2c;
+}
+.ex-card.pressure { --frame-accent: #91d9c3; border-color: #649b9d; }
+.ex-route, .pressure .gauge, .pressure .g-btn, .g-vent { border-radius: 0; }
+.circuit, .ex-route, .pressure .gauge { box-shadow: inset 0 2px #344760; }
+.pressure .gauge.sel { box-shadow: inset 0 2px #a58a5b; }
+.pressure .g-btn, .ex-card .close-btn, .ex-controls .touch-btn {
+  border-radius: 0; box-shadow: inset 0 2px #ffffff2b, inset 0 -3px #080d188f, 2px 2px #0b1421;
+  backdrop-filter: none;
+}
+.ex-controls .action-btn { border-width: 1px; }
+.ex-controls .touch-stick { border-radius: 8px; background: #16253c; }
+.ex-controls .touch-knob {
+  border-radius: 5px; clip-path: var(--pixel-corners);
+  box-shadow: 2px 2px #080d18, inset 0 -4px #497f97;
+}
+.rover-menu { padding: 9px; }
+.tutorial-guide { background: #182a40; }
+
+.info-terminal { overflow-wrap: anywhere; }
+.info-terminal > header { padding: 13px 16px; margin-bottom: 16px; }
+.info-terminal h1 { color: #f2d394; line-height: 1.2; }
+.info-terminal > .panel { background-color: #121e30; }
+.info-terminal > .panel > h2 { border-bottom: 1px solid #354b61; padding-bottom: 7px; color: #afe0ef; }
+.info-terminal :is(.sci-tab, .topic, .glossary, .real-col, .role, .timeline li) { border-radius: 0; }
+.info-terminal .topic { border-top-color: #597585; }
+.info-terminal .sci-intro {
+  margin: 0 0 12px; padding: 9px 12px; border-left: 2px solid #7493aa; background: #111c2ef5;
+}
+@media (max-width: 640px) {
+  .info-terminal { padding: 18px 12px 38px; }
+  .info-terminal > header { flex-direction: column; align-items: flex-start; gap: 9px; padding: 11px 12px; margin-bottom: 12px; }
+  .info-terminal .header-actions { justify-content: flex-start; gap: 5px; }
+  .info-terminal .header-actions .btn { max-width: 100%; white-space: normal; }
+  .info-terminal > .panel { padding: 14px; }
+}
+@media (max-width: 400px) and (max-height: 720px) {
+  /* The puzzle supplies the current objective. Keep battery and progress visible above the controls. */
+  .explore:has(.ex-card.puzzle) :is(.ex-top .tag, .ex-steps, .ex-obj) { display: none; }
+  .explore:has(.ex-card.puzzle) .ex-progress-short { display: inline; color: #c8d5e7; font: 700 11px ui-monospace, monospace; }
+  .explore:has(.ex-card.puzzle) .ex-mission h1 { margin-block: 0 4px; }
+  .ex-card.puzzle { padding-block: 8px; }
+  .ex-card.puzzle h2 { margin-block: 4px 6px; }
+  .tutorial-circuit .tutorial-guide { grid-template-columns: 66px minmax(0, 1fr); }
+  .tutorial-circuit .tutorial-astronaut { grid-area: 1 / 1; width: 34px; justify-self: center; }
+  .tutorial-circuit .tutorial-copy { grid-area: 1 / 2 / span 2; }
+  .tutorial-circuit .tutorial-actions { grid-area: 2 / 1; justify-content: center; }
 }

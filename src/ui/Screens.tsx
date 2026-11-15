@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { MISSION } from '../game/config';
 import { computeScore, totalSolarWithSiteFraction } from '../game/engine';
 import { missionSummary, missionTitle, takeaways } from '../game/debrief';
@@ -7,45 +7,18 @@ import type { GameState, MissionConfig, Resources } from '../game/types';
 import { LangToggle, useI18n } from '../i18n/I18n';
 import type { Key } from '../i18n/translate';
 import type { OutpostState } from '../art/outpost';
+import { paintLunarBackdrop } from '../art/lunarBackdrop';
 import { BaseScene } from './BaseScene';
+import { AstronautGuide } from './AstronautGuide';
 import { DifficultyBadge } from './MissionScreen';
 
-/* ---------------- Animated background ---------------- */
-const BG_STARS = Array.from({ length: 140 }, (_, i) => {
-  const a = Math.sin(i * 12.9898) * 43758.5453;
-  const b = Math.sin(i * 78.233) * 12345.6789;
-  return { i, x: (a - Math.floor(a)) * 100, y: (b - Math.floor(b)) * 100, r: ((a * b) % 1 + 1) % 1 * 1.4 + 0.3, d: (i % 9) * 0.5 };
-});
-
-export function Starfield() {
-  return (
-    <div className="starfield" aria-hidden>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <radialGradient id="mg" cx="0.35" cy="0.35">
-            <stop offset="0" stopColor="#d9dde4" />
-            <stop offset="0.7" stopColor="#8f96a3" />
-            <stop offset="1" stopColor="#4b505b" />
-          </radialGradient>
-          <radialGradient id="halo">
-            <stop offset="0.6" stopColor="#56C7F2" stopOpacity="0.15" />
-            <stop offset="1" stopColor="#56C7F2" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        {BG_STARS.map((s) => (
-          <circle key={s.i} cx={s.x} cy={s.y} r={s.r * 0.12} fill="#cfe3ff" className="twinkle" style={{ animationDelay: `${s.d}s` }} />
-        ))}
-        <g className="moon-drift">
-          <circle cx="50" cy="128" r="62" fill="url(#halo)" />
-          <circle cx="50" cy="128" r="52" fill="url(#mg)" />
-          <circle cx="34" cy="94" r="5" fill="#7a808c" opacity="0.6" />
-          <circle cx="60" cy="88" r="3" fill="#7a808c" opacity="0.6" />
-          <circle cx="72" cy="100" r="6" fill="#7a808c" opacity="0.5" />
-          <circle cx="47" cy="104" r="2.2" fill="#7a808c" opacity="0.6" />
-        </g>
-      </svg>
-    </div>
-  );
+export function LunarBackdrop() {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const g = canvas.current?.getContext('2d', { alpha: false });
+    if (g) paintLunarBackdrop(g);
+  }, []);
+  return <canvas ref={canvas} className="lunar-backdrop" width={416} height={234} aria-hidden />;
 }
 
 /* ---------------- Main menu ---------------- */
@@ -58,8 +31,8 @@ const menuOutpost: OutpostState = {
   upgrades: { solar: false, oxygen: false, battery: false },
 };
 
-export function MainMenu({ onStart, onHow, onCredits, onContinue, slot, notice, fx }: {
-  onStart: () => void; onHow: () => void; onCredits: () => void;
+export function MainMenu({ onStart, onHow, onCredits, onPractice, onContinue, slot, notice, fx }: {
+  onStart: () => void; onHow: () => void; onCredits: () => void; onPractice: () => void;
   /** Present when a saved game exists. */
   onContinue?: () => void; slot?: SaveSlot | null;
   /** One-off message about the save (cleared damaged save, interrupted expedition). */
@@ -88,6 +61,7 @@ export function MainMenu({ onStart, onHow, onCredits, onContinue, slot, notice, 
           ) : (
             <button className="btn btn-primary" onClick={onStart} autoFocus>{t('menu.start')}</button>
           )}
+          <button className="btn menu-practice" onClick={onPractice}>{t('tut.practice')}</button>
           <button className="btn" onClick={onHow}>{t('menu.how')}</button>
           <button className="btn" onClick={onCredits}>{t('menu.credits')}</button>
         </div>
@@ -95,6 +69,36 @@ export function MainMenu({ onStart, onHow, onCredits, onContinue, slot, notice, 
         <div className="menu-foot">{t('menu.foot')}<br /><span className="save-note">{t('save.note')}</span></div>
       </div>
     </div>
+  );
+}
+
+export function TutorialStart({ difficulty = DEFAULT_DIFFICULTY, first = false, onGuided, onDirect, onBack }: {
+  difficulty?: DifficultyId; first?: boolean; onGuided: () => void; onDirect?: () => void; onBack: () => void;
+}) {
+  const { t } = useI18n();
+  const practice = !onDirect;
+  return (
+    <main className="screen info-page tutorial-start">
+      <header>
+        <DifficultyBadge id={difficulty} />
+        <div className="header-actions">
+          <LangToggle />
+          <button type="button" className="btn" onClick={onBack}>{t('common.back')}</button>
+        </div>
+      </header>
+      <section className="panel tutorial-start-card" aria-labelledby="tutorial-start-title">
+        <AstronautGuide mood={practice ? 'happy' : 'ready'} />
+        <div>
+          <h1 id="tutorial-start-title">{t(practice ? 'tut.practice.h' : 'tut.start.h')}</h1>
+          <p>{t(practice ? 'tut.practice.line' : 'tut.start.line')}</p>
+          {!practice && first && difficulty === 'easy' && <small>{t('tut.start.easy')}</small>}
+        </div>
+        <div className="tutorial-start-actions">
+          <button type="button" className={`btn ${first || practice ? 'btn-primary' : ''}`} data-tutorial-start="guided" onClick={onGuided} autoFocus={first || practice}>{t(practice ? 'tut.practice.start' : 'tut.start.with')}</button>
+          {onDirect && <button type="button" className={`btn ${first ? '' : 'btn-primary'}`} data-tutorial-start="direct" onClick={onDirect} autoFocus={!first}>{t('tut.start.direct')}</button>}
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -179,19 +183,20 @@ export function DifficultySelect({ initial, onStart, onBack }: { initial: Diffic
 }
 
 /* ---------------- How to play ---------------- */
-export function HowToPlay({ cfg, onBack, onStart }: { cfg: MissionConfig; onBack: () => void; onStart: () => void }) {
+export function HowToPlay({ cfg, onBack, onStart, onPractice }: { cfg: MissionConfig; onBack: () => void; onStart: () => void; onPractice: () => void }) {
   const { t, tr } = useI18n();
   const MISSION = cfg;
   const f = MISSION.facilities;
   const minHealth = MISSION.failure.minHealth;
   const research = MISSION.capacity.research;
   return (
-    <div className="screen info-page">
+    <div className="screen info-page info-terminal">
       <header>
         <h1>{t('how.title')}</h1>
         <div className="header-actions">
           <LangToggle />
           <button className="btn" onClick={onBack}>{t('common.back')}</button>
+          <button className="btn" onClick={onPractice}>{t('tut.practice')}</button>
           <button className="btn btn-primary" onClick={onStart}>{t('common.startMission')}</button>
         </div>
       </header>
@@ -334,7 +339,7 @@ export function Credits({ onBack }: { onBack: () => void }) {
     go(SCI_TABS[(i + d + SCI_TABS.length) % SCI_TABS.length]);
   };
   return (
-    <div className="screen info-page sci-page">
+    <div className="screen info-page info-terminal sci-page">
       <header>
         <h1>{t('cr.title')}</h1>
         <div className="header-actions">

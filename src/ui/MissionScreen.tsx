@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { coachByDefault, coachTips } from '../game/coach';
 import { difficultyOf, missionFor, type DifficultyId } from '../game/difficulty';
 import {
@@ -38,7 +38,10 @@ import {
 } from '../game/types';
 import { LangToggle, useI18n } from '../i18n/I18n';
 import type { Key, Params, T } from '../i18n/translate';
+import type { ResourceStep, TutorialEvent, TutorialProgress } from '../tutorial/progress';
 import { BaseScene } from './BaseScene';
+import { baseMessage, reportMessage, resourceToInspect, safeTrainingShift } from './baseTutorial';
+import { TutorialGuide } from './TutorialGuide';
 import { useWarningQueue, WarningBanner, type MissionWarning } from './WarningBanner';
 
 interface Props {
@@ -51,6 +54,9 @@ interface Props {
   fx: boolean;
   onToggleFx: () => void;
   seenWarnings: Set<string>;
+  tutorial: TutorialProgress | null;
+  teach: (event: TutorialEvent) => void;
+  practice: boolean;
 }
 
 const COLORS: Record<keyof Resources, string> = {
@@ -103,12 +109,18 @@ export function DifficultyBadge({ id }: { id: DifficultyId }) {
   return <span className={`diff-chip diff-${id}`} title={t('diff.chipTip')}><i aria-hidden />{t(`diff.${id}.name` as Key)}</span>;
 }
 
-function Stat({ name, short, tip, k, value, next, warnAt, critAt, max = 100 }: {
-  name: string; short: string; tip: string; k: keyof Resources; value: number; next: number; warnAt: number; critAt: number; max?: number;
+function inspectMeter(inspect?: () => void) {
+  return inspect && { role: 'button', tabIndex: 0, onClick: inspect, onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inspect(); }
+  } };
+}
+
+function Stat({ name, short, tip, k, value, next, warnAt, critAt, max = 100, inspect }: {
+  name: string; short: string; tip: string; k: keyof Resources; value: number; next: number; warnAt: number; critAt: number; max?: number; inspect?: () => void;
 }) {
   const cls = value <= critAt ? 'crit' : value <= warnAt ? 'warn' : '';
   return (
-    <div className={`stat ${cls}`} title={tip}>
+    <div className={`stat ${cls}`} title={tip} data-tutorial-target={`resource-${k}`} {...inspectMeter(inspect)}>
       <div className="stat-head">
         <span className="name"><Icon k={k} /><span className="long">{name}</span><span className="short">{short}</span></span>
         <span>
@@ -178,7 +190,7 @@ function EventCard({ state, ev, onChoose }: { state: GameState; ev: MissionEvent
       </div>
       <h3>{ev.radiation ? '☢ ' : '⚠ '}{t(`ev.${ev.id}.title` as Key)}</h3>
       {!chosen && <p className="event-desc">{t(`ev.${ev.id}.desc` as Key)}</p>}
-      <div className="event-choices">
+      <div className="event-choices" data-tutorial-target="emergency">
         {ev.choices.map((c) => (
           <button key={c.id} type="button" className={`choice ${chosen === c.id ? 'picked' : ''}`} aria-pressed={chosen === c.id}
             disabled={state.status !== 'playing'} onClick={() => onChoose(c.id)}>
@@ -201,7 +213,7 @@ function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState
     battery: t('upg.battery.eff', { a: cfg.capacity.energy, b: cfg.capacity.energy + (U.battery.bonus ?? 0) }),
   };
   return (
-    <div className="upgrades">
+    <div className="upgrades" data-tutorial-target="upgrades">
       <div className="upg-head"><span className="tag">{t('upg.title')}</span><small>{t('upg.note')}</small></div>
       {UPGRADE_IDS.map((id) => {
         const installed = state.upgrades[id];
@@ -219,7 +231,7 @@ function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState
               <b>{t(`upg.${id}` as Key)}</b>
               <small>{eff[id]}</small>
             </div>
-            <button type="button" className="upg-btn" disabled={installed || (!can && !building)} title={tip} aria-pressed={building}
+            <button type="button" className="upg-btn" data-tutorial-target={`upgrade-${id}`} disabled={installed || (!can && !building)} title={tip} aria-pressed={building}
               onFocus={() => onFocus(`upg.${id}`)} onBlur={() => onFocus(null)}
               onClick={() => setState(toggleBuild(state, cfg, id))}>
               <span>{label}</span>
@@ -232,9 +244,11 @@ function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState
   );
 }
 
-export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx, onToggleFx, seenWarnings }: Props) {
+export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx, onToggleFx, seenWarnings, tutorial, teach, practice }: Props) {
   const { t } = useI18n();
-  const [report, setReport] = useState<ShiftReport | null>(null);
+  const scope = useRef<HTMLDivElement>(null);
+  const [report, setReport] = useState<ShiftReport | null>(() =>
+    tutorial?.base === 'report' && tutorial.status !== 'skipped' ? state.history.find(previous => previous.shift === 1) ?? null : null);
   const [focus, setFocus] = useState<string | null>(null);
   const [roverMenu, setRoverMenu] = useState(false);
   const { warning, add: warn } = useWarningQueue();
@@ -244,7 +258,14 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
 
   const outcome = useMemo(() => projectCurrentShift(state, cfg), [state]);
   const warnings = useMemo(() => getWarnings(state, cfg, outcome), [state, outcome]);
-  const allowed = canAdvance(outcome);
+  const guidance = tutorial?.status === 'active' ? tutorial : null;
+  const firstShift = !!guidance && guidance.base !== 'done' && guidance.base !== 'report' && state.shift === 1;
+  const allowed = canAdvance(outcome) && (!firstShift || (guidance.base === 'advance' && safeTrainingShift(cfg, outcome)));
+  const guidedMessage = guidance && !report ? baseMessage(guidance, state, cfg, outcome, teach) : undefined;
+  const currentMeter = resourceToInspect(guidance);
+  const inspect = (step: ResourceStep) => currentMeter === step && !report ? () => teach({ type: 'observe', step }) : undefined;
+  const skipGuide = () => teach({ type: 'skip' });
+  const pauseGuide = () => teach({ type: 'pause' });
   const r = state.resources;
   const ended = state.status !== 'playing';
   const event = getEvent(cfg, state.shift);
@@ -308,15 +329,19 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
     id === 'event' ? t('power.event') : id === 'build' && state.build ? t('power.build', { name: t(`upg.${state.build}` as Key) }) : facName(id);
 
   const onAdvance = () => {
+    if (!allowed) return;
     const next = advanceShift(state, cfg);
     if (next === state) return;
+    const result = next.history[next.history.length - 1];
     setState(next);
-    setReport(next.history[next.history.length - 1]);
+    setReport(result);
+    teach({ type: 'advance', report: result });
     setFocus(null);
   };
+  const closeReport = () => { setReport(null); teach({ type: 'close-report' }); };
 
   return (
-    <div className={`mission screen ${fx ? '' : 'no-fx'} ${event?.radiation && !ended ? 'rad-alert' : ''}`}>
+    <div ref={scope} className={`mission screen ${guidedMessage ? 'mission-guided' : ''} ${fx ? '' : 'no-fx'} ${event?.radiation && !ended ? 'rad-alert' : ''}`}>
       <WarningBanner warning={warning} />
       {/* ---------- Top bar ---------- */}
       <header className="topbar panel">
@@ -324,6 +349,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
           <h1>SUN-01</h1>
           <span className="shift">{t('mission.shift', { n: state.shift, total: cfg.totalShifts })}</span>
           <DifficultyBadge id={state.difficulty} />
+          {practice && <span className="tutorial-practice-tag">{t('tut.practice.tag')}</span>}
           <span className="chapter-tag" title={t(`chapter.${chapter}.goal` as Key)}>{t('chapter.label', { n: chapter })} · {t(`chapter.${chapter}.title` as Key)}</span>
           <div className="shift-pips" aria-hidden>
             {cfg.shifts.map((s) => (
@@ -332,12 +358,12 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
             ))}
           </div>
         </div>
-        <div className="stats">
-          <Stat name={t('res.energy')} short={t('res.short.energy')} tip={t('res.tip.energy')} k="energy" value={r.energy} next={outcome.after.energy} warnAt={20} critAt={12} max={capacity} />
-          <Stat name={t('res.oxygen')} short={t('res.short.oxygen')} tip={t('res.tip.oxygen')} k="oxygen" value={r.oxygen} next={outcome.after.oxygen} warnAt={30} critAt={15} />
-          <Stat name={t('res.food')} short={t('res.short.food')} tip={t('res.tip.food')} k="food" value={r.food} next={outcome.after.food} warnAt={30} critAt={15} />
-          <Stat name={t('res.health')} short={t('res.short.health')} tip={t('res.tip.health')} k="health" value={r.health} next={outcome.after.health} warnAt={70} critAt={40} />
-          <div className="stat" title={t('res.tip.research')}>
+        <div className="stats" data-tutorial-target="resources">
+          <Stat name={t('res.energy')} short={t('res.short.energy')} tip={t('res.tip.energy')} k="energy" value={r.energy} next={outcome.after.energy} warnAt={20} critAt={12} max={capacity} inspect={inspect('energy')} />
+          <Stat name={t('res.oxygen')} short={t('res.short.oxygen')} tip={t('res.tip.oxygen')} k="oxygen" value={r.oxygen} next={outcome.after.oxygen} warnAt={30} critAt={15} inspect={inspect('oxygen')} />
+          <Stat name={t('res.food')} short={t('res.short.food')} tip={t('res.tip.food')} k="food" value={r.food} next={outcome.after.food} warnAt={30} critAt={15} inspect={inspect('food')} />
+          <Stat name={t('res.health')} short={t('res.short.health')} tip={t('res.tip.health')} k="health" value={r.health} next={outcome.after.health} warnAt={70} critAt={40} inspect={inspect('health')} />
+          <div className="stat" title={t('res.tip.research')} data-tutorial-target="resource-research" {...inspectMeter(inspect('research'))}>
             <div className="stat-head">
               <span className="name"><Icon k="research" /><span className="long">{t('res.research')}</span><span className="short">{t('res.short.research')}</span></span>
               <span>
@@ -354,6 +380,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
         </div>
         <div className="topbar-actions">
           <LangToggle className="compact" />
+          {!ended && tutorial?.status === 'paused' && <button type="button" className="icon-btn" onClick={() => teach({ type: 'resume' })}>{t('tut.resume')}</button>}
           {!ended && (
             <button className={`icon-btn coach-btn ${coachOpen ? 'on' : ''}`} onClick={() => setCoach(!coachOpen)} aria-pressed={coachOpen} title={t('coach.toggleTip')}>
               {t(coachOpen ? 'coach.hide' : 'coach.show')}
@@ -362,9 +389,15 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
           <button className="icon-btn" onClick={onToggleFx} aria-pressed={fx} title={t('mission.fxTip')}>
             {t('mission.fx', { state: t(fx ? 'mission.fxOn' : 'mission.fxOff') })}
           </button>
-          <button className="icon-btn" onClick={onQuit} title={t('mission.menuTip')}>{t('mission.menu')}</button>
+          <button className="icon-btn" onClick={onQuit} title={t(practice ? 'tut.practice.exit' : 'mission.menuTip')}>{t(practice ? 'tut.practice.exit' : 'mission.menu')}</button>
         </div>
       </header>
+
+      {guidedMessage && (
+        <div className="tutorial-base-slot">
+          <TutorialGuide message={guidedMessage} scope={scope} onPause={pauseGuide} onSkip={skipGuide} reveal />
+        </div>
+      )}
 
       {/* ---------- Center ---------- */}
       <div className="mission-main">
@@ -394,7 +427,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
             </div>
           )}
           <div className="scene-overlay">
-            <div className="chip">
+            <div className="chip" data-tutorial-target="solar">
               <span className="k">{t('chip.solar')}</span>
               <strong style={{ color: '#F4CA65' }}>+{outcome.solar}</strong> {t('chip.energy')} · {t('chip.sunlit', { pct: Math.round(outcome.illumination * 100) })}
               <div className="sun-calc">
@@ -425,7 +458,12 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
             </div>
           )}
           {event && !ended && (
-            <EventCard state={state} ev={event} onChoose={(id) => setState(chooseOption(state, cfg, id))} />
+            <EventCard state={state} ev={event} onChoose={(id) => {
+              const next = chooseOption(state, cfg, id);
+              if (next === state) return;
+              setState(next);
+              if (next.choice === id) teach({ type: 'lesson', lesson: 'emergency' });
+            }} />
           )}
 
           <div className="fac on locked slim">
@@ -451,12 +489,19 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
                 <div className="title"><span className="led" />{name}<span className={`state ${on && !lockedByEvent ? 'on' : ''}`}>{stateLabel}</span></div>
                 <button
                   className="switch"
+                  data-tutorial-target={`facility-${id}`}
                   role="switch"
                   aria-checked={on && !lockedByEvent}
                   aria-label={t('switch.aria', { name, state: t(on ? 'switch.on' : 'switch.off') })}
                   title={lockedByEvent || forcedOn ? t('switch.tipLocked') : !on && !available ? t('switch.tipDone') : t(on ? 'switch.tipOn' : 'switch.tipOff', { name })}
                   disabled={ended || lockedByEvent || forcedOn || (!on && !available)}
-                  onClick={() => { setFocus(id); setState(toggleFacility(state, cfg, id)); }}
+                  onClick={() => {
+                    const next = toggleFacility(state, cfg, id);
+                    if (next === state) return;
+                    setFocus(id);
+                    setState(next);
+                    teach({ type: 'switch', facility: id, before: on, after: next.facilities[id] });
+                  }}
                 />
                 <div className="meta"><span className="cost">{t('controls.cost', { n: facilityCost(cfg, id, state.upgrades) })}</span><span className="gain">{gain}</span></div>
               </div>
@@ -479,7 +524,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
             </div>
           )}
 
-          <div className="power-budget">
+          <div className="power-budget" data-tutorial-target="power">
             <div className="tag">{t('power.title')}</div>
             <div className="power-meter" aria-hidden>
               <div className={`demand ${outcome.demand > outcome.available ? 'over' : ''}`} style={{ width: `${Math.min(100, (outcome.demand / Math.max(1, outcome.available)) * 100)}%` }} />
@@ -523,7 +568,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
           <span className="edu-title">{t(`${eduKey}.title` as Key)}</span>
           <p>{t(`${eduKey}.text` as Key)}</p>
         </section>
-        <div className="advance panel">
+        <div className="advance panel" data-tutorial-dock>
           {!ended && expeditions.length > 0 && (
             <div className="rover-launch">
               {roverMenu && expeditions.length > 1 && (
@@ -546,12 +591,13 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
           {ended ? (
             <button className="btn btn-primary" onClick={onFinish}>{t('advance.results')}</button>
           ) : (
-            <button className="btn btn-primary" onClick={onAdvance} disabled={!allowed} title={allowed ? t('advance.tip') : outcome.needsChoice ? t('warn.choiceNeeded') : t('advance.hintBlocked')}>
+            <button className="btn btn-primary" data-tutorial-target="advance" onClick={onAdvance} disabled={!allowed} title={allowed ? t('advance.tip') : firstShift ? t('tut.advance.wait') : outcome.needsChoice ? t('warn.choiceNeeded') : t('advance.hintBlocked')}>
               {t('advance.btn')}
             </button>
           )}
           <span className="hint">
-            {ended ? t('advance.hintDone') : allowed ? t('advance.hintEnds', { n: state.shift }) : outcome.needsChoice ? t('ev.decide') : t('advance.hintBlocked')}
+            {ended ? t('advance.hintDone') : allowed ? t('advance.hintEnds', { n: state.shift }) : firstShift && guidance.base !== 'advance'
+              ? t('tut.advance.wait') : outcome.needsChoice ? t('ev.decide') : t('advance.hintBlocked')}
           </span>
         </div>
       </div>
@@ -560,7 +606,10 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
         <ShiftReportModal
           report={report}
           state={state}
-          onClose={() => setReport(null)}
+          scope={scope}
+          guided={guidance?.base === 'report' && report.shift === 1 && !ended}
+          onSkip={skipGuide}
+          onClose={closeReport}
           onResults={() => { setReport(null); onFinish(); }}
         />
       )}
@@ -568,8 +617,8 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
   );
 }
 
-function ShiftReportModal({ report, state, onClose, onResults }: {
-  report: ShiftReport; state: GameState; onClose: () => void; onResults: () => void;
+function ShiftReportModal({ report, state, scope, guided, onSkip, onClose, onResults }: {
+  report: ShiftReport; state: GameState; scope: RefObject<HTMLDivElement>; guided: boolean; onSkip: () => void; onClose: () => void; onResults: () => void;
 }) {
   const { t } = useI18n();
   const cfg = missionFor(state.difficulty);
@@ -597,7 +646,8 @@ function ShiftReportModal({ report, state, onClose, onResults }: {
             {highlights.map((h, i) => <span key={i} className={`hl ${h.cls}`}>{h.text}</span>)}
           </div>
         )}
-        <div className="deltas">
+        {guided && <TutorialGuide message={reportMessage(report)} scope={scope} onSkip={onSkip} />}
+        <div className="deltas" data-tutorial-target="report">
           {keys.map((k) => (
             <div key={k}>
               <div className="k">{t(`res.short.${k}` as Key)}</div>

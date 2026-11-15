@@ -12,6 +12,7 @@
 import { isDifficulty, LEGACY_DIFFICULTY } from './difficulty';
 import { FACILITY_IDS, UPGRADE_IDS } from './types';
 import type { GameState, MissionConfig } from './types';
+import { readTutorial, type TutorialProgress } from '../tutorial/progress';
 
 export const SAVE_KEY = 'sun-save';
 /** v2 adds `state.difficulty`. v1 saves (before difficulties existed) are migrated, never deleted. */
@@ -23,6 +24,8 @@ export interface SaveFile {
   state: GameState;
   /** Expedition id while the rover is out (checkpoint marker); null at the base. */
   exploring: string | null;
+  /** Optional guided-tour progress, saved atomically with the mission. */
+  tutorial?: TutorialProgress;
 }
 
 export type LoadResult =
@@ -111,6 +114,8 @@ export function loadGame(kv: KV | null, cfg: MissionConfig): LoadResult {
   if (!isValidState(data.state, cfg)) return discard(kv, 'shape');
   const exploring = typeof data.exploring === 'string' && cfg.expeditions.some((e) => e.id === data.exploring) ? data.exploring : null;
   const save: SaveFile = { v: SAVE_VERSION, savedAt: isNum(data.savedAt) ? data.savedAt : 0, state: data.state, exploring };
+  const tutorial = readTutorial(data.tutorial, save.state);
+  if (tutorial) save.tutorial = tutorial;
   if (migratedFrom) {
     // write the upgraded file back so the migration happens once
     try { kv.setItem(SAVE_KEY, JSON.stringify(save)); } catch { /* storage full or blocked: keep playing */ }
@@ -124,9 +129,9 @@ function discard(kv: KV, reason: 'parse' | 'version' | 'shape'): LoadResult {
   return { kind: 'invalid', reason };
 }
 
-export function saveGame(kv: KV | null, state: GameState, exploring: string | null = null, now = Date.now()): boolean {
+export function saveGame(kv: KV | null, state: GameState, exploring: string | null = null, now = Date.now(), tutorial: TutorialProgress | null = null): boolean {
   if (!kv) return false;
-  const file: SaveFile = { v: SAVE_VERSION, savedAt: now, state, exploring };
+  const file: SaveFile = { v: SAVE_VERSION, savedAt: now, state, exploring, ...(tutorial && { tutorial }) };
   try {
     kv.setItem(SAVE_KEY, JSON.stringify(file));
     return true;

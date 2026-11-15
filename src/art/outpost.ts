@@ -1,6 +1,7 @@
 import type { Facilities, FacilityId, UpgradeId, Upgrades } from '../game/types';
 import { boulder, crater, dot, face, ink, line, oval, random, surface, type Point } from './pixels';
 import { roverShadow, roverSprite } from './roverSprite';
+import { solarModule, solarModuleShadow, type SolarModule } from './solarModule';
 
 export const OUTPOST_WIDTH = 512;
 export const OUTPOST_HEIGHT = 304;
@@ -190,37 +191,13 @@ function windowRow(g: CanvasRenderingContext2D, x: number, y: number, count: num
   }
 }
 
+function outpostRack(x: number, y: number): SolarModule {
+  return { origin: [x, y + 5], along: [30, -15], rear: [-21, -10.5], lower: 8, upper: 17, cells: [5, 4] };
+}
+
 function solarPanel(g: CanvasRenderingContext2D, x: number, y: number, state: OutpostState, fault: boolean) {
-  const uv = (u: number, v: number): Point => [x + u * 6 - v * 5, y - u * 3 - v * 5];
-  // Tall supports are under the west edge (v=4). The low rail faces the Sun to the east.
-  for (const [u, v] of [[1, 3.7], [4, 3.7], [1, 0.25], [4, 0.25]]) {
-    const top = uv(u, v);
-    const foot: Point = [top[0], y - u * 3 + 7 - v * 1.7];
-    line(g, top, foot, v > 1 ? '#5d687d' : '#a3a4a4', 3);
-    dot(g, foot[0] - 2, foot[1], '#4b5066', 5, 2);
-    dot(g, foot[0] + 1, foot[1] - 2, '#c6b693');
-  }
-  const lowA = uv(0, 0), lowB = uv(5, 0), highA = uv(0, 4), highB = uv(5, 4);
-  face(g, [lowA, lowB, [lowB[0], lowB[1] + 3], [lowA[0], lowA[1] + 3]], '#48546b');
-  face(g, [lowA, lowB, highB, highA], '#233149');
-  for (let v = 0; v < 4; v++) for (let u = 0; u < 5; u++) {
-    const cracked = fault && u >= 2 && v < 3 && (u + v) % 3 !== 1;
-    const surfaceColor = cracked ? '#653e51' : state.dust ? '#827181'
-      : state.sunlight > 0.55 ? (v === 0 ? '#5581b1' : '#3d6396') : '#345078';
-    face(g, [uv(u + 0.09, v + 0.06), uv(u + 0.85, v + 0.06), uv(u + 0.85, v + 0.88), uv(u + 0.09, v + 0.88)], surfaceColor);
-    line(g, uv(u + 0.20, v + 0.14), uv(u + 0.63, v + 0.14), cracked ? '#cc817d' : v === 0 ? '#a4c8d5' : '#6888b1');
-  }
-  line(g, highA, highB, '#7a8498');
-  line(g, lowB, highB, '#b5c2c8');
-  line(g, lowA, lowB, state.dust ? '#baa28f' : '#f0d7a5');
-  dot(g, lowB[0] - 3, lowB[1] + 1, '#f8e5bf', 3);
-  if (fault) {
-    line(g, uv(2.9, 3.4), uv(3.4, 2.3), '#151c2c', 2);
-    line(g, uv(3.4, 2.3), uv(2.7, 1.4), '#151c2c', 2);
-    line(g, uv(2.7, 1.4), uv(3.4, 0), '#151c2c', 2);
-    dot(g, x + 18, y - 1, '#ff9a87', 2);
-  }
-  led(g, x + 6, y + 5, fault ? ink.red : state.dust ? '#b69070' : ink.amber);
+  solarModule(g, outpostRack(x, y), { broken: fault, dust: state.dust, lit: state.sunlight > 0.55 });
+  led(g, x + 7, y + 3, fault ? ink.red : state.dust ? '#b69070' : ink.amber);
 }
 
 function tank(g: CanvasRenderingContext2D, x: number, y: number, h: number, color: string) {
@@ -354,8 +331,9 @@ function dock(g: CanvasRenderingContext2D, x: number, y: number) {
     line(g, [px - 13, py + 4], [px - 9, py + 6], i % 2 ? '#3d4459' : '#d4b27b', 2);
   }
   line(g, [x - 25, y - 17], [x + 22, y - 40], '#a4a3a7', 2);
-  roverShadow(g, x + 8, y - 12);
-  roverSprite(g, x + 8, y - 12, { angle: -Math.PI / 4 });
+  const angle = -Math.PI / 4;
+  roverShadow(g, x + 8, y - 12, angle);
+  roverSprite(g, x + 8, y - 12, { angle });
   led(g, x + 42, y - 18, ink.ice);
 }
 
@@ -387,9 +365,9 @@ export function drawOutpost(g: CanvasRenderingContext2D, state: OutpostState) {
     ['oxygen', 31, 35, 58], ['lab', 31, 30, 55], ['greenhouse', 33, 40, 72],
     ['habitat', 44, 42, 75], ['shelter', 33, 35, 57], ['battery', 31, 29, 34], ['dock', 53, 43, 15],
   ] as const) shadow(g, ...anchors[id], a, b, h);
-  for (const [x, y] of solarPositions) shadow(g, x + 2, y + 7, 30, 20, 49);
+  for (const [x, y] of solarPositions) solarModuleShadow(g, outpostRack(x, y));
   if (state.upgrades.solar) {
-    for (const [x, y] of solarExtension) shadow(g, x + 2, y + 7, 30, 20, 49);
+    for (const [x, y] of solarExtension) solarModuleShadow(g, outpostRack(x, y));
   }
   for (const { id, points } of pipes) {
     corridor(g, points, live(id, state) ? (id === 'solar' || id === 'battery' ? '#c49d6a' : '#70a4aa') : '#515b6e');

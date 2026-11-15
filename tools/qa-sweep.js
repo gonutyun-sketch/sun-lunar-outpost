@@ -51,6 +51,8 @@
     await click($('.diff-card.diff-normal'), 150); C('difficulty: normal selected');
     await click($('.diff-card.diff-easy'), 150);
     await click($('.diff-actions .btn-primary'), 500);
+    C('tutorial choice');
+    await click($('[data-tutorial-start="direct"]'), 350);
     C('base + emergency (shift 9)');
     if (!$('.coach')) await click($('.coach-btn'), 200);
     C('base + coach tips');
