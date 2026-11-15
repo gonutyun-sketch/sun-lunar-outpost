@@ -3,7 +3,8 @@
  * de-duplication, voice limit, continuous-sound lifecycle and failure handling.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AUDIO_KEY, AudioEngine, DEFAULT_AUDIO, masterGain, MAX_MASTER, MAX_VOICES, readAudioSettings } from './engine';
+import { AUDIO_KEY, AudioEngine, DEFAULT_AUDIO, masterGain, MAX_MASTER, MAX_VOICES, musicGain, readAudioSettings, type AudioSettings } from './engine';
+import { CHORD_SECONDS } from './music';
 import { LOOPS, SFX } from './sfx';
 
 class Param {
@@ -36,11 +37,15 @@ class FakeCtx {
   createOscillator() { const s = new Source(); this.sources.push(s); return s; }
   createBufferSource() { const s = new Source(); this.sources.push(s); return s; }
   createBiquadFilter() { return Object.assign(new Node(), { type: 'lowpass', frequency: new Param(), Q: new Param() }); }
+  createConvolver() { return Object.assign(new Node(), { buffer: null as unknown }); }
+  createDelay() { return Object.assign(new Node(), { delayTime: new Param() }); }
   createDynamicsCompressor() { return Object.assign(new Node(), { threshold: new Param(), ratio: new Param(), attack: new Param(), release: new Param() }); }
-  createBuffer(_c: number, len: number) { const d = new Float32Array(len); return { getChannelData: () => d }; }
+  createBuffer(_c: number, len: number) { const d = new Float32Array(Math.min(len, 64)); return { getChannelData: () => d }; }
   resume() { this.state = 'running'; this.onstatechange?.(); return Promise.resolve(); }
   suspend() { this.state = 'suspended'; return Promise.resolve(); }
 }
+
+const S = (o: Partial<AudioSettings>): AudioSettings => ({ ...DEFAULT_AUDIO, ...o });
 
 function memory() {
   const data = new Map<string, string>();
@@ -64,7 +69,7 @@ describe('settings', () => {
     expect(DEFAULT_AUDIO.volume).toBeLessThanOrEqual(70);
     const kv = memory();
     kv.setItem(AUDIO_KEY, JSON.stringify({ on: false, volume: 250 }));
-    expect(readAudioSettings(kv)).toEqual({ on: false, volume: 100 });
+    expect(readAudioSettings(kv)).toEqual({ ...DEFAULT_AUDIO, on: false, volume: 100 });
     kv.setItem(AUDIO_KEY, '{broken');
     expect(readAudioSettings(kv)).toEqual(DEFAULT_AUDIO);
   });
@@ -75,16 +80,16 @@ describe('settings', () => {
     e.setSettings({ volume: 35 });
     e.setSettings({ on: false });
     const again = new AudioEngine(() => null, kv);
-    expect(again.settings).toEqual({ on: false, volume: 35 });
+    expect(again.settings).toEqual({ ...DEFAULT_AUDIO, on: false, volume: 35 });
     expect(kv.getItem('sun-save')).toBe('GAME');
   });
 
   it('master gain: 0 when muted or at 0 %, louder with volume, capped', () => {
-    expect(masterGain({ on: false, volume: 100 })).toBe(0);
-    expect(masterGain({ on: true, volume: 0 })).toBe(0);
-    expect(masterGain({ on: true, volume: 50 })).toBeGreaterThan(0);
-    expect(masterGain({ on: true, volume: 50 })).toBeLessThan(masterGain({ on: true, volume: 100 }));
-    expect(masterGain({ on: true, volume: 100 })).toBe(MAX_MASTER);
+    expect(masterGain(S({ on: false, volume: 100 }))).toBe(0);
+    expect(masterGain(S({ on: true, volume: 0 }))).toBe(0);
+    expect(masterGain(S({ on: true, volume: 50 }))).toBeGreaterThan(0);
+    expect(masterGain(S({ on: true, volume: 50 }))).toBeLessThan(masterGain(S({ on: true, volume: 100 })));
+    expect(masterGain(S({ on: true, volume: 100 }))).toBe(MAX_MASTER);
   });
 });
 
@@ -161,8 +166,9 @@ describe('continuous sounds (motor, drill, ambience)', () => {
   it('level 0 is silent but stopLoop releases every node (screen closed, mission ended)', () => {
     const { e, ctx } = engine();
     e.unlock();
+    const from = ctx.sources.length; // music sources started on unlock are not part of the drill
     e.loop('drill', 1);
-    const voice = ctx.sources.slice();
+    const voice = ctx.sources.slice(from);
     e.stopLoop('drill');
     expect(e.activeLoops).toEqual([]);
     vi.advanceTimersByTime(500);
@@ -209,5 +215,57 @@ describe('continuous sounds (motor, drill, ambience)', () => {
     e.unlock();
     for (const name of Object.keys(LOOPS)) e.loop(name as keyof typeof LOOPS, 1);
     expect(e.activeLoops.sort()).toEqual(Object.keys(LOOPS).sort());
+  });
+});
+
+describe('background music', () => {
+  it('starts after the first gesture, one instance only, quieter than the effects by default', () => {
+    const { e, ctx } = engine();
+    expect(e.musicPlaying).toBe(false);
+    e.unlock();
+    expect(e.musicPlaying).toBe(true);
+    const n = ctx.sources.length;
+    expect(n).toBeGreaterThan(0); // first chord scheduled
+    e.unlock(); e.setSettings({ volume: 70 });
+    expect(ctx.sources.length).toBe(n); // no second copy
+    expect(musicGain(DEFAULT_AUDIO)).toBeLessThan(masterGain(DEFAULT_AUDIO));
+  });
+
+  it('keeps scheduling chords as time passes, but not while the context is suspended', () => {
+    const { e, ctx } = engine();
+    e.unlock();
+    const before = ctx.sources.length;
+    ctx.currentTime += CHORD_SECONDS * 2;
+    vi.advanceTimersByTime(1000);
+    expect(ctx.sources.length).toBeGreaterThan(before);
+    ctx.state = 'suspended';
+    const frozen = ctx.sources.length;
+    ctx.currentTime += CHORD_SECONDS * 3;
+    vi.advanceTimersByTime(3000);
+    expect(ctx.sources.length).toBe(frozen);
+  });
+
+  it('music off, music volume 0 or all sound off stops it; turning it back on restarts it', () => {
+    const { e, kv } = engine();
+    e.unlock();
+    e.setSettings({ music: false });
+    expect(e.musicPlaying).toBe(false);
+    e.setSettings({ music: true });
+    expect(e.musicPlaying).toBe(true);
+    e.setSettings({ musicVolume: 0 });
+    expect(e.musicPlaying).toBe(false);
+    e.setSettings({ musicVolume: 40, on: false });
+    expect(e.musicPlaying).toBe(false);
+    e.setSettings({ on: true });
+    expect(e.musicPlaying).toBe(true);
+    expect(JSON.parse(kv.getItem(AUDIO_KEY)!)).toMatchObject({ music: true, musicVolume: 40 });
+  });
+
+  it('music settings are saved separately from the effects and validated on load', () => {
+    const kv = memory();
+    kv.setItem(AUDIO_KEY, JSON.stringify({ on: true, volume: 50, music: false, musicVolume: -20 }));
+    expect(readAudioSettings(kv)).toEqual({ on: true, volume: 50, music: false, musicVolume: 0 });
+    kv.setItem(AUDIO_KEY, JSON.stringify({ on: true, volume: 50 })); // saved by the previous version
+    expect(readAudioSettings(kv)).toMatchObject({ music: true, musicVolume: DEFAULT_AUDIO.musicVolume });
   });
 });

@@ -101,7 +101,8 @@ Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(ba
 ## Audio notes
 - `src/audio/engine.ts`: single `audio` manager (Web Audio). `audio.play(name)` = one-shot effect (per-sound cooldown, max 6 overlapping, alerts/successes have priority). `audio.loop(name, level, pitch)` = continuous sound (one managed voice per name; call every frame/tick, it only ramps), `audio.stopLoop(name)` releases it. `installAudio()` (main.tsx) unlocks audio on the first click/tap/key, gives every button a click (`data-sfx="confirm|cancel|select|none|custom"`), and suspends audio while the tab is hidden.
 - `src/audio/sfx.ts`: all recipes (oscillators + filtered noise). Add a sound there, then call `audio.play` from an event handler — never from render. Rover loops (motor/drill/cabin) are driven from the ExploreScreen frame loop and released in its cleanup; the base hum from MissionScreen.
-- Settings: localStorage `sun-audio` = `{ on, volume }` (separate from the game save). UI: `src/ui/SoundControl.tsx`.
+- Music: `src/audio/music.ts` (generative, scheduled 4 s ahead on the audio clock; one instance, own bus straight to the speakers, not through the effects compressor). The engine starts/stops it from the settings (`syncMusic`).
+- Settings: localStorage `sun-audio` = `{ on, volume, music, musicVolume }` (separate from the game save; older saves get music defaults). UI: `src/ui/SoundControl.tsx`.
 - Dev only: `window.__audio` (log of requested sounds, `activeLoops`) for QA; not in production builds. Tests: `src/audio/engine.test.ts` (fake AudioContext).
 
 ## Responsive / touch notes

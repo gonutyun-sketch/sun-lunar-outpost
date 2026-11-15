@@ -41,7 +41,8 @@ Add the tool (or person), what it did and the commits/PR to the lists above, and
 - AI choices the team should review: the site coordinate (chosen as the map's highest-value pixel), the cautious site name, and the scenario modifiers (chosen so existing game balance is unchanged).
 
 ## Game audio
-- All sound effects and ambience are **synthesised in the browser by the game's own code** (Web Audio API: oscillators, filtered noise, envelopes) — `src/audio/sfx.ts`. No audio files, no downloaded or third-party sounds, no music, no voices, no TTS.
+- All sound effects and ambience are **synthesised in the browser by the game's own code** (Web Audio API: oscillators, filtered noise, envelopes) — `src/audio/sfx.ts`. No audio files, no downloaded or third-party sounds, no voices, no TTS.
+- The background music is an original generative piece composed in code (`src/audio/music.ts`: four slow pad chords in D with a lydian colour, a low drone and random pentatonic bell notes with echo and reverb, all synthesised live). It was written with Claude Code on the team's request ("space feeling"); no existing music was used or imitated.
 - The sound recipes and the audio engine (`src/audio/engine.ts`) were written with Claude Code (Anthropic) on the team's instructions and checked by listening tests and signal measurements in the browser.
 - Game sounds are a fictional feedback layer (rover sensors, base machines). They are not recordings from the Moon or NASA, and NASA did not provide or endorse them.
 

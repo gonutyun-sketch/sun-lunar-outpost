@@ -18,7 +18,8 @@ _Last updated: 2026-11-15 (game audio)_
 | 11b | Pixel / 2.5D redesign (OpenAI Codex, PR #1) | ✅ Merged by the team |
 | 12 | Difficulty modes, beginner help, Science & Credits learning hub, QA | ✅ Merged (PR #2) |
 | 12b | Rover route rebalance (Mission 1 shortcut vs sunny detour), route guide in the briefing | ✅ Merged (PR #3) |
-| 13 | Game audio: synthesised SFX, rover motor/drill, tutorial cues, alerts, sound settings | ✅ Done on branch feature/game-audio-sfx (awaiting review) |
+| 13 | Game audio: synthesised SFX, rover motor/drill, tutorial cues, alerts, sound settings | ✅ Merged (PR #5) |
+| 13b | Generative space background music + music settings | ✅ Done on branch feature/space-music (not listened to yet) |
 | 6 | Public deployment, final QA, submission | ✅ Deployed: https://gonutyun-sketch.github.io/sun-lunar-outpost/ · submission materials remaining |
 
 ## Phase 5 delivered
@@ -158,6 +159,11 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Events: buttons (click / confirm / cancel / select), facility ON/OFF (only when the state really changes; refused → short low tone), upgrade queued / cancelled / installed, shift advance + outcome with the report (shift done, research gained, mission success or failure), warning banners (one cue per new batch: caution or critical), tutorial (first hint, progress, completion), rover launch / arrival ping / interaction / pickup / valve checks / leak / circuit tiles, connection and solve / repaired array / pressure valve ticks, vent and stable / drill start + loop / samples / all samples / dock / mission complete / failure, shadow enter/leave, bumps.
 - Rules: nothing before the first click/tap/key (autoplay policy); per-sound cooldown and voice limit; continuous sounds are single voices, silent when paused or not moving, released when the screen closes; tab hidden → audio suspended; mute/volume saved (`sun-audio`) and never touch the game save.
 - Sound settings: speaker button on the main menu, base top bar and rover pause menu (on/off, 0–100 %, default on at 60 %).
+
+## Space background music (2026-11-15)
+- `src/audio/music.ts`: original generative piece synthesised live — Dmaj9 → Bm9 → Gmaj7(#11) → A sus, ~11 s per chord, two detuned voices per note with slow swells, low sine drone, 2–4 random D-pentatonic bells per chord with echo (0.62 s) and a 4.5 s generated reverb. No files.
+- Plays from the first click on every screen at a low level (default 40 % ≈ well under the effects); own on/off + volume in the sound panel; muted with "sound off"; pauses with the hidden tab (scheduler waits while the audio clock is suspended).
+- Checked: typecheck, 143/143 tests (4 new music tests), build. NOT checked by ear or in the browser yet (per request).
 
 ## Remaining (priority order)
 1. **P0** Live game: https://gonutyun-sketch.github.io/sun-lunar-outpost/ (GitHub Pages via Actions, main = merge of PR #2 + PR #3). Remaining: test on real phones/tablets and with students.
