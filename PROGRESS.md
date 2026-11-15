@@ -1,6 +1,6 @@
 # PROGRESS — SUN: Lunar Outpost
 
-_Last updated: 2026-11-15 (merged and deployed)_
+_Last updated: 2026-11-15 (game audio)_
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -18,6 +18,7 @@ _Last updated: 2026-11-15 (merged and deployed)_
 | 11b | Pixel / 2.5D redesign (OpenAI Codex, PR #1) | ✅ Merged by the team |
 | 12 | Difficulty modes, beginner help, Science & Credits learning hub, QA | ✅ Merged (PR #2) |
 | 12b | Rover route rebalance (Mission 1 shortcut vs sunny detour), route guide in the briefing | ✅ Merged (PR #3) |
+| 13 | Game audio: synthesised SFX, rover motor/drill, tutorial cues, alerts, sound settings | ✅ Done on branch feature/game-audio-sfx (awaiting review) |
 | 6 | Public deployment, final QA, submission | ✅ Deployed: https://gonutyun-sketch.github.io/sun-lunar-outpost/ · submission materials remaining |
 
 ## Phase 5 delivered
@@ -152,6 +153,12 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
   - No console errors from the game.
 - NOT verified: real phones/tablets (only emulation), Mission 2/3 puzzle overlays at every live size (they were checked on the identical build on the dev server), real students.
 
+## Game audio (2026-11-15)
+- Web Audio engine (`src/audio/`), all sounds synthesised in code (no files). 39 one-shot effects + 4 continuous sounds (rover motor, drill, rover cabin hum, base life-support hum).
+- Events: buttons (click / confirm / cancel / select), facility ON/OFF (only when the state really changes; refused → short low tone), upgrade queued / cancelled / installed, shift advance + outcome with the report (shift done, research gained, mission success or failure), warning banners (one cue per new batch: caution or critical), tutorial (first hint, progress, completion), rover launch / arrival ping / interaction / pickup / valve checks / leak / circuit tiles, connection and solve / repaired array / pressure valve ticks, vent and stable / drill start + loop / samples / all samples / dock / mission complete / failure, shadow enter/leave, bumps.
+- Rules: nothing before the first click/tap/key (autoplay policy); per-sound cooldown and voice limit; continuous sounds are single voices, silent when paused or not moving, released when the screen closes; tab hidden → audio suspended; mute/volume saved (`sun-audio`) and never touch the game save.
+- Sound settings: speaker button on the main menu, base top bar and rover pause menu (on/off, 0–100 %, default on at 60 %).
+
 ## Remaining (priority order)
 1. **P0** Live game: https://gonutyun-sketch.github.io/sun-lunar-outpost/ (GitHub Pages via Actions, main = merge of PR #2 + PR #3). Remaining: test on real phones/tablets and with students.
 2. **P1** Student play-test of Easy/Normal (real devices); tune `DIFFICULTIES` if needed.
@@ -165,6 +172,9 @@ Balance evidence (src/game/balance.test.ts + `npm run analyze`):
 - Control panel may still scroll slightly at 1366×768 when 2+ warnings are shown (all critical warnings are now above the fold).
 - Mid-transition screenshots can show the fading shift banner (cosmetic).
 
-## Last test results (2026-11-15, live deployment)
-- `npm ci` + `npm run typecheck` ✅ · `npm test` ✅ 116/116 · `npm run build` ✅ (clean checkout of the merged code); GitHub Actions build + deploy ✅.
-- Live site: see "Live deployment" above.
+## Last test results (2026-11-15, game audio)
+- `npm ci` + `npm run typecheck` ✅ · `npm test` ✅ 139/139 (15 new audio tests) · `npm run build` ✅ (dev hooks absent from the bundle).
+- Signal checks (Chrome, dev server): every effect rendered offline with a non-silent waveform (peaks ≈ −15 dBFS at the default 60 %, 20–780 ms long); live AudioContext stays closed until the first real click, then `running`; analyser on the master bus showed signal for effects, motor and drill and zero after stop / level 0 / mute / 0 %; volume curve measured exactly (100 %/50 % = 2.83×, 50 %/20 % = 3.95×).
+- Event checks in real play: base tutorial steps, switches, upgrades, emergency choice, advance, research, warnings; Mission 1 driven with keys (motor loop, shadow cues, arrival ping, circuit tile/connect/solved/repaired, bumps, dock + complete, tutorial completion); Mission 2 (pickup, valve checks, leak, valve ticks, vent, stable, dock); Mission 3 (drill start/stop on release, cancel by moving, samples, all samples). Pause → motor/cabin silent; abort/exit → rover loops released, base hum back; menu → all loops released; hidden tab → suspended/resumed; mute persisted across reload and the save still continued; continue after reload replays no past sounds. Touch joystick (mobile emulation): motor up while dragging, fades to 0 after the rover stops.
+- Layout with the new speaker button: 320×568, 390×844, 844×390, 1366×768, 1920×1080 — 29–30 screens each, all OK; sound panel stays inside the screen at 320 px. No console errors.
+- NOT verified: hearing on real phones (iOS Safari, Android Chrome) and real speakers/headphones by a person; the checks above measured the generated signal, not perceived loudness.

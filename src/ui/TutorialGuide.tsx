@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { audio } from '../audio/engine';
 import { useI18n } from '../i18n/I18n';
 import type { Key, Lang, Params } from '../i18n/translate';
 import { AstronautGuide, type GuideMood } from './AstronautGuide';
@@ -19,6 +20,8 @@ export interface GuideMessage {
 
 type Edges = { left: number; top: number; right: number; bottom: number };
 const clipping = /^(auto|scroll|hidden|clip)$/;
+/** Last guide cue played (module scope: a re-mounted card or StrictMode re-run does not replay it). */
+let lastCue = '';
 const padding = 3;
 
 function visibleArea(host: DOMRect, ancestors: HTMLElement[]): Edges {
@@ -195,6 +198,16 @@ export function TutorialGuide({ message, scope, onPause, onSkip, reveal = false 
   const { lang, t } = useI18n();
   const ref = useRef<HTMLElement>(null);
   const mood = message.mood ?? 'ready';
+  // Sound only when the guide actually changes: a soft chime for the first hint or a caution, a small
+  // rising tone when the player's action moved the guide on (or it praises them).
+  useEffect(() => {
+    const cue = `${message.id}:${mood}`;
+    if (cue === lastCue) return;
+    const first = lastCue === '';
+    lastCue = cue;
+    audio.play(!first && mood !== 'caution' ? 'tutorialStep' : 'guide');
+    return () => { if (!document.querySelector('[data-guide-step]')) lastCue = ''; };
+  }, [message.id, mood]);
   return (
     <section ref={ref} className={`tutorial-guide mood-${mood}`} aria-label={t('tut.guide')} data-guide-step={message.id}>
       <AstronautGuide mood={mood} />

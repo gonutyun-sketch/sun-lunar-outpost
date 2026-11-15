@@ -9,6 +9,7 @@ import type { Key } from '../i18n/translate';
 import type { OutpostState } from '../art/outpost';
 import { paintLunarBackdrop } from '../art/lunarBackdrop';
 import { BaseScene } from './BaseScene';
+import { SoundControl } from './SoundControl';
 import { AstronautGuide } from './AstronautGuide';
 import { DifficultyBadge } from './MissionScreen';
 
@@ -42,7 +43,7 @@ export function MainMenu({ onStart, onHow, onCredits, onPractice, onContinue, sl
   const { t } = useI18n();
   return (
     <div className="screen menu">
-      <LangToggle className="menu-lang" />
+      <div className="menu-lang menu-corner"><LangToggle /><SoundControl /></div>
       <div className="menu-art"><BaseScene state={menuOutpost} fx={fx} /></div>
       <div className="menu-content">
         <div className="kicker">{t('menu.kicker')}</div>

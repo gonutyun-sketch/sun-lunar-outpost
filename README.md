@@ -36,6 +36,8 @@ For a first mission, pick a difficulty and choose **Start with the guide**. The 
 | Circuit puzzle | click a tile, or 1–3 / ←→ + E | tap a yellow tile |
 | Pressure puzzle | 1–3 select, ↑/↓ (short taps) | ▲ / ▼ buttons |
 
+**Sound:** soft retro sci-fi effects for buttons, base systems, alerts, the tutorial and the rover (motor, drill, puzzles). Use the speaker button (main menu, base top bar, rover pause menu) to switch sound on/off and set the volume; it is saved in your browser. Sound starts after your first click or tap, as browsers require.
+
 Rover battery (training values): sunlight barely drains it (the rover's solar deck trickle-charges while stopped), shadow drains it fast. The Mission 1 briefing shows a shadow shortcut and a sunny detour with estimated time and battery.
 
 **Difficulty** (chosen at New Game, saved with the mission):
@@ -70,7 +72,7 @@ The base sits at **89.4749°S, 137.4431°W**, a ridge near Shackleton crater. It
 - **Citation:** Mazarico, E., et al. (2011), *Illumination conditions of the lunar polar regions using LOLA topography*, Icarus 211, 1066–1081, doi:10.1016/j.icarus.2010.10.030. Visual reference: NASA SVS 4930.
 
 ## Tech
-React 18 + TypeScript + Vite, plus Vitest. The game is a static site with no backend, accounts, or runtime AI. All simulation rules are pure functions in `src/game/engine.ts` and are covered by unit tests (116 in total, incl. difficulty balance, save/continue and rover physics) plus balance bots; an exact best-play search (`npm run analyze`) confirms a perfect 100 is possible.
+React 18 + TypeScript + Vite, plus Vitest. The game is a static site with no backend, accounts, or runtime AI. All simulation rules are pure functions in `src/game/engine.ts` and are covered by unit tests (139 in total, incl. difficulty balance, save/continue and rover physics) plus balance bots; an exact best-play search (`npm run analyze`) confirms a perfect 100 is possible.
 
 ```bash
 npm run typecheck

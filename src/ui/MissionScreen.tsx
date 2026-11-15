@@ -36,10 +36,12 @@ import {
   type ShiftReport,
   type UpgradeId,
 } from '../game/types';
+import { audio } from '../audio/engine';
 import { LangToggle, useI18n } from '../i18n/I18n';
 import type { Key, Params, T } from '../i18n/translate';
 import type { ResourceStep, TutorialEvent, TutorialProgress } from '../tutorial/progress';
 import { BaseScene } from './BaseScene';
+import { SoundControl } from './SoundControl';
 import { baseMessage, reportMessage, resourceToInspect, safeTrainingShift } from './baseTutorial';
 import { TutorialGuide } from './TutorialGuide';
 import { useWarningQueue, WarningBanner, type MissionWarning } from './WarningBanner';
@@ -192,7 +194,7 @@ function EventCard({ state, ev, onChoose }: { state: GameState; ev: MissionEvent
       {!chosen && <p className="event-desc">{t(`ev.${ev.id}.desc` as Key)}</p>}
       <div className="event-choices" data-tutorial-target="emergency">
         {ev.choices.map((c) => (
-          <button key={c.id} type="button" className={`choice ${chosen === c.id ? 'picked' : ''}`} aria-pressed={chosen === c.id}
+          <button key={c.id} type="button" data-sfx="select" className={`choice ${chosen === c.id ? 'picked' : ''}`} aria-pressed={chosen === c.id}
             disabled={state.status !== 'playing'} onClick={() => onChoose(c.id)}>
             <b>{t(`ev.${ev.id}.${c.id}` as Key)}</b>
             <small>{t(`ev.${ev.id}.${c.id}.fx` as Key, choiceParams(ev, c, cfg))}</small>
@@ -231,9 +233,14 @@ function UpgradePanel({ state, setState, onFocus }: { state: GameState; setState
               <b>{t(`upg.${id}` as Key)}</b>
               <small>{eff[id]}</small>
             </div>
-            <button type="button" className="upg-btn" data-tutorial-target={`upgrade-${id}`} disabled={installed || (!can && !building)} title={tip} aria-pressed={building}
+            <button type="button" className="upg-btn" data-sfx="custom" data-tutorial-target={`upgrade-${id}`} disabled={installed || (!can && !building)} title={tip} aria-pressed={building}
               onFocus={() => onFocus(`upg.${id}`)} onBlur={() => onFocus(null)}
-              onClick={() => setState(toggleBuild(state, cfg, id))}>
+              onClick={() => {
+                const next = toggleBuild(state, cfg, id);
+                // queued = assembly sound; cancelled = soft cancel; refused = short low "no"
+                audio.play(next === state ? 'denied' : next.build === id ? 'upgrade' : 'cancel');
+                setState(next);
+              }}>
               <span>{label}</span>
               {!installed && <em>{t('upg.cost', { n: U[id].energyCost })}</em>}
             </button>
@@ -328,11 +335,19 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
   const demandName = (id: string) =>
     id === 'event' ? t('power.event') : id === 'build' && state.build ? t('power.build', { name: t(`upg.${state.build}` as Key) }) : facName(id);
 
+  // Very quiet base ambience (life support) while this screen is open; released on exit.
+  useEffect(() => { audio.loop('baseHum', 1); return () => audio.stopLoop('baseHum'); }, []);
+
   const onAdvance = () => {
     if (!allowed) return;
     const next = advanceShift(state, cfg);
-    if (next === state) return;
+    if (next === state) { audio.play('denied'); return; }
     const result = next.history[next.history.length - 1];
+    // System sound now; the outcome sound lands with the shift report (the modal rises in ~0.3 s).
+    audio.play('advance');
+    const cue = next.status === 'failed' ? 'failure' : next.status !== 'playing' ? 'victory'
+      : result.researchGained > 0 ? 'research' : result.built ? 'upgradeDone' : 'shiftDone';
+    window.setTimeout(() => audio.play(cue), 280);
     setState(next);
     setReport(result);
     teach({ type: 'advance', report: result });
@@ -380,6 +395,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
         </div>
         <div className="topbar-actions">
           <LangToggle className="compact" />
+          <SoundControl className="compact" />
           {!ended && tutorial?.status === 'paused' && <button type="button" className="icon-btn" onClick={() => teach({ type: 'resume' })}>{t('tut.resume')}</button>}
           {!ended && (
             <button className={`icon-btn coach-btn ${coachOpen ? 'on' : ''}`} onClick={() => setCoach(!coachOpen)} aria-pressed={coachOpen} title={t('coach.toggleTip')}>
@@ -495,9 +511,11 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
                   aria-label={t('switch.aria', { name, state: t(on ? 'switch.on' : 'switch.off') })}
                   title={lockedByEvent || forcedOn ? t('switch.tipLocked') : !on && !available ? t('switch.tipDone') : t(on ? 'switch.tipOn' : 'switch.tipOff', { name })}
                   disabled={ended || lockedByEvent || forcedOn || (!on && !available)}
+                  data-sfx="custom"
                   onClick={() => {
                     const next = toggleFacility(state, cfg, id);
-                    if (next === state) return;
+                    if (next === state) { audio.play('denied'); return; }
+                    audio.play(next.facilities[id] ? 'powerOn' : 'powerOff');
                     setFocus(id);
                     setState(next);
                     teach({ type: 'switch', facility: id, before: on, after: next.facilities[id] });
@@ -591,7 +609,7 @@ export function MissionScreen({ state, setState, onFinish, onQuit, onExplore, fx
           {ended ? (
             <button className="btn btn-primary" onClick={onFinish}>{t('advance.results')}</button>
           ) : (
-            <button className="btn btn-primary" data-tutorial-target="advance" onClick={onAdvance} disabled={!allowed} title={allowed ? t('advance.tip') : firstShift ? t('tut.advance.wait') : outcome.needsChoice ? t('warn.choiceNeeded') : t('advance.hintBlocked')}>
+            <button className="btn btn-primary" data-sfx="custom" data-tutorial-target="advance" onClick={onAdvance} disabled={!allowed} title={allowed ? t('advance.tip') : firstShift ? t('tut.advance.wait') : outcome.needsChoice ? t('warn.choiceNeeded') : t('advance.hintBlocked')}>
               {t('advance.btn')}
             </button>
           )}

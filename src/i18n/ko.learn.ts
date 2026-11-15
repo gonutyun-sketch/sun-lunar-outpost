@@ -364,4 +364,10 @@ export const koLearn: Record<keyof typeof enLearn, string> = {
   'team.role.codex.3': '변경 사항에 대한 브라우저·코드 검증',
   'team.rolesNote': 'AI 도구는 코드와 초안을 작성했고, 무엇을 만들지 정하고 테스트하고 승인한 것은 사람 팀입니다. 이 목록은 Git 기록과 AI_USAGE.md를 따르며, 새로 참여하는 사람이나 AI도 그곳에 기록됩니다.',
   'team.assets': '게임 속 모든 그림은 게임 코드가 직접 그립니다(외부 이미지 없음). 플레이 중에는 어떤 AI 서비스도 사용하지 않으며, 개인 정보를 수집하지 않습니다.',
+  // ---------- 소리 ----------
+  'sound.title': '소리',
+  'sound.on': '켜짐',
+  'sound.off': '꺼짐',
+  'sound.volume': '효과음 음량',
+  'sound.note': '게임 속 소리는 로버와 기지 장비가 알려 주는 신호예요. 실제 달에는 공기가 없어서 소리가 표면을 따라 퍼지지 않아요.',
 };

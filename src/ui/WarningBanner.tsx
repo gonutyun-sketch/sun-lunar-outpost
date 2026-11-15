@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { audio } from '../audio/engine';
 import { useI18n } from '../i18n/I18n';
 import type { Key } from '../i18n/translate';
 
@@ -7,13 +8,19 @@ export interface MissionWarning {
   tone: 'caution' | 'critical';
   title: Key;
   action: Key;
+  /** No alert sound (the screen plays its own, softer cue). */
+  quiet?: boolean;
 }
 
 export function useWarningQueue() {
   const [queue, setQueue] = useState<MissionWarning[]>([]);
   const warning = queue[0];
   const add = useCallback((...messages: MissionWarning[]) => {
-    if (messages.length) setQueue((pending) => [...pending, ...messages]);
+    if (!messages.length) return;
+    setQueue((pending) => [...pending, ...messages]);
+    // One sound per new batch of warnings (the most serious one); repeated warnings are filtered by the callers.
+    const loud = messages.filter((m) => !m.quiet);
+    if (loud.length) audio.play(loud.some((m) => m.tone === 'critical') ? 'alertCritical' : 'alertCaution');
   }, []);
   const clear = useCallback(() => setQueue([]), []);
 
