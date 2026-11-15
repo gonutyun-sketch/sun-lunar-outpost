@@ -98,6 +98,12 @@ Score: survival 40 + round(30 × r/4) + round(20·health/100) + round(10·min(ba
 - Anything that only changes what is drawn goes in src/rover/fx.ts / render.ts. Do not change ROVER constants, world.ts geometry or collision code without re-running `npx vitest run src/rover` and comparing route times.
 - Respect `motion` (effects on and no reduced-motion) for anything animated; keep particle caps.
 
+## Audio notes
+- `src/audio/engine.ts`: single `audio` manager (Web Audio). `audio.play(name)` = one-shot effect (per-sound cooldown, max 6 overlapping, alerts/successes have priority). `audio.loop(name, level, pitch)` = continuous sound (one managed voice per name; call every frame/tick, it only ramps), `audio.stopLoop(name)` releases it. `installAudio()` (main.tsx) unlocks audio on the first click/tap/key, gives every button a click (`data-sfx="confirm|cancel|select|none|custom"`), and suspends audio while the tab is hidden.
+- `src/audio/sfx.ts`: all recipes (oscillators + filtered noise). Add a sound there, then call `audio.play` from an event handler — never from render. Rover loops (motor/drill/cabin) are driven from the ExploreScreen frame loop and released in its cleanup; the base hum from MissionScreen.
+- Settings: localStorage `sun-audio` = `{ on, volume }` (separate from the game save). UI: `src/ui/SoundControl.tsx`.
+- Dev only: `window.__audio` (log of requested sounds, `activeLoops`) for QA; not in production builds. Tests: `src/audio/engine.test.ts` (fake AudioContext).
+
 ## Responsive / touch notes
 - Breakpoints: >1100 desktop grid; ≤1100 single column + fixed bottom action bar; ≤640 phone; max-height 500 landscape = compact exploration HUD.
 - Touch controls live in ExploreScreen (TouchStick, ActionButton); input feeds `Input.ax/ay` (analog) or drillHeld. Keep cleanup effects unmount-only (callbacks change every render).

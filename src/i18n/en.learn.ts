@@ -367,4 +367,10 @@ export const enLearn = {
   'team.role.codex.3': 'Browser and code checks for its changes',
   'team.rolesNote': 'AI tools wrote code and drafts; the human team decided what to build, tested it and approved it. This list follows the project history in Git and AI_USAGE.md, and new contributors (human or AI) will be added there.',
   'team.assets': 'All pictures in the game are drawn by its own code (no external images). No AI service runs while you play, and no personal data is collected.',
+  // ---------- Sound ----------
+  'sound.title': 'Sound',
+  'sound.on': 'ON',
+  'sound.off': 'OFF',
+  'sound.volume': 'Effects volume',
+  'sound.note': 'Game sounds are feedback from the rover and base machines. On the real Moon there is no air, so sound cannot travel across the surface.',
 } as const;

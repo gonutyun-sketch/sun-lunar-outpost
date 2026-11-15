@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { difficultyOf, missionFor, type DifficultyId } from '../game/difficulty';
+import { audio } from '../audio/engine';
 import { LangToggle, useI18n } from '../i18n/I18n';
 import type { Key } from '../i18n/translate';
 import { createCircuit, isSolved, powered, rotateTile, targetMasks, wrongTiles, N, E, S, W, type Circuit } from '../rover/circuit';
@@ -17,6 +18,7 @@ import { cameraZoom, joystickVector, knobOffset, renderDpr } from '../rover/touc
 import { MAP, type Site } from '../rover/world';
 import { learnedToMove, type TutorialEvent, type TutorialProgress } from '../tutorial/progress';
 import { roverMessage } from './roverTutorial';
+import { SoundControl } from './SoundControl';
 import { TutorialGuide } from './TutorialGuide';
 import { useWarningQueue, WarningBanner, type MissionWarning } from './WarningBanner';
 
@@ -182,7 +184,15 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
     w.__explore = { pressureRef, stepRef, vis, faulty: () => FAULTY[failuresRef.current % 3] };
   }
 
-  const setPhase = (p: Phase) => { phaseRef.current = p; setPhaseState(p); };
+  const setPhase = (p: Phase) => {
+    const prev = phaseRef.current;
+    if (p !== prev) {
+      if (p === 'play' && (prev === 'brief' || prev === 'failed')) audio.play('launch');
+      if (p === 'success') window.setTimeout(() => audio.play('missionComplete'), 320);
+      if (p === 'failed') audio.play('failure');
+    }
+    phaseRef.current = p; setPhaseState(p);
+  };
   const setStep = (i: number) => { stepRef.current = i; setStepIdxState(i); };
   const setPause = (v: boolean) => { pausedRef.current = v; setPausedState(v); };
   const vibrate = (pattern: number | number[]) => {
@@ -254,18 +264,19 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
     const near = targetSites().find((id) => dist(rover.current, MAP.sites[id]) <= MAP.sites[id].r);
     if (!near) {
       // pressed E too far away: say so instead of silently ignoring it
-      if (s.kind !== 'collect' && targetSites().length) { say(t('ex.fx.far'), 1000); vibrate(20); }
+      if (s.kind !== 'collect' && targetSites().length) { say(t('ex.fx.far'), 1000); vibrate(20); audio.play('denied'); }
       return;
     }
     const site = MAP.sites[near];
     rover.current = { ...rover.current, vx: 0, vy: 0 };
-    if (s.kind === 'goto') { pop('info', site.x, site.y); next(); }
-    else if (s.kind === 'pickup') { cargo.current = true; pop('ok', site.x, site.y, t('ex.fx.loaded')); sparkle(site.x, site.y, 8); say(t('ex.o2.picked')); next(); }
-    else if (s.kind === 'dock') { pop('ok', site.x, site.y); next(); }
+    if (s.kind === 'goto') { audio.play('interact'); pop('info', site.x, site.y); next(); }
+    else if (s.kind === 'pickup') { audio.play('pickup'); cargo.current = true; pop('ok', site.x, site.y, t('ex.fx.loaded')); sparkle(site.x, site.y, 8); say(t('ex.o2.picked')); next(); }
+    else if (s.kind === 'dock') { audio.play('dock'); pop('ok', site.x, site.y); next(); }
     else if (s.kind === 'scan') {
-      if (near === faulty()) { pop('warn', site.x, site.y, t('ex.fx.leak')); say(t('ex.o2.found')); vibrate([25, 40, 25]); next(); }
+      if (near === faulty()) { audio.play('leak'); pop('warn', site.x, site.y, t('ex.fx.leak')); say(t('ex.o2.found')); vibrate([25, 40, 25]); next(); }
       else if (!scannedRef.current.includes(near)) {
         const easy = tuneRef.current.circuitHint === 'path';
+        audio.play('scanOk');
         setScanned([...scannedRef.current, near]); pop('info', site.x, site.y, t('ex.o2.normalTag'));
         say(t(easy ? 'ex.o2.normalEasy' : 'ex.o2.normal'), easy ? 3200 : 1300);
       }
@@ -281,6 +292,8 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
     if (n === c) return;
     circuitRef.current = n;
     setCircuit(n);
+    // tile click; a brighter tone when the rotation connects more of the power path
+    audio.play(isSolved(n) ? 'solved' : powered(n).size > powered(c).size ? 'connect' : 'tile');
     teach({ type: 'rover', skill: 'rotated' });
     rover.current = { ...rover.current, battery: Math.max(0, rover.current.battery - tuneRef.current.rotateCost) };
     if (isSolved(n)) {
@@ -289,6 +302,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
         setFlash(null);
         if (def.steps[stepRef.current]?.kind === 'circuit') {
           vis.current.solarFixedAt = performance.now() / 1000;
+          audio.play('repaired');
           const sb = MAP.sites.solarB;
           pop('ok', sb.x, sb.y, t('ex.fx.online'));
           next();
@@ -383,6 +397,8 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
     };
     let alive = true;
     let idle = 1, bumpCool = 0, trackPrune = 0, prevNear: SiteId | null = null;
+    // audio: zone of the previous active frame (-1 = not driving yet), drill state, update throttle
+    let prevZone = -1, drilling = false, audioTimer = 1;
     const frame = (now: number) => {
       // stop if the screen was closed (a late frame can arrive after unmount)
       if (!alive || !wrapRef.current || !canvasRef.current) return;
@@ -410,6 +426,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
         bumpCool = Math.max(0, bumpCool - dt);
         if (res.bumped && v.speed > 40 && bumpCool === 0) {
           bumpCool = 0.35;
+          audio.play('bump');
           if (mo) {
             shake.current = Math.min(6, shake.current + 3);
             const fx0 = R.x + Math.cos(R.angle) * 22, fy0 = R.y + Math.sin(R.angle) * 22;
@@ -429,11 +446,13 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
         if (kind === 'pressure') {
           const r = stepPressure(pressureRef.current, valveSel.current, valveDir.current, dt);
           pressureRef.current = r.game;
-          if (r.vented !== null) { setVentFlash(r.vented); setTimeout(() => setVentFlash(null), 900); vibrate(40); }
+          if (r.vented !== null) { audio.play('vent'); setVentFlash(r.vented); setTimeout(() => setVentFlash(null), 900); vibrate(40); }
+          else if (valveDir.current !== 0) audio.play('valve'); // soft ticks while a valve turns (rate-limited)
           gaugeTimer += dt;
           if (gaugeTimer > 1 / 30 || r.game.done) { gaugeTimer = 0; setGauges(r.game); }
           if (r.game.done) {
             o2Done.current = true; valveDir.current = 0;
+            audio.play('solved');
             v.oxygenFixedAt = tNow;
             const pl = MAP.blocks[5];
             if (pl) pop('ok', pl.x + pl.w / 2, pl.y + pl.h / 2, t('ex.fx.o2ok'));
@@ -460,6 +479,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
               pop('ok', site.x, site.y, t('ex.fx.sample', { n: got.length, total: 3 }));
               sparkle(site.x, site.y, 14);
               vibrate(30);
+              audio.play(got.length >= 3 ? 'allSamples' : 'sample');
               if (got.length >= 3) {
                 pop('big', R.x, R.y, t('ex.fx.allSamples'));
                 sparkle(R.x, R.y, 24);
@@ -475,8 +495,8 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
         if (tuneRef.current.shadowAlerts && !frozen) {
           const lvlShadow = res.deep ? 2 : res.inShadow ? 1 : 0;
           if (lvlShadow > shadowAlerted.current) {
-            if (lvlShadow === 2) warn({ id: 'shadow-deep', tone: 'critical', title: 'notice.deep.title', action: 'notice.deep.action' });
-            else warn({ id: 'shadow', tone: 'caution', title: 'notice.shadow.title', action: 'notice.shadow.action' });
+            if (lvlShadow === 2) warn({ id: 'shadow-deep', tone: 'critical', title: 'notice.deep.title', action: 'notice.deep.action', quiet: true });
+            else warn({ id: 'shadow', tone: 'caution', title: 'notice.shadow.title', action: 'notice.shadow.action', quiet: true });
             shadowAlerted.current = lvlShadow;
           }
         }
@@ -523,7 +543,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
       if (nearId && nearId !== prevNear && active) {
         const ns = MAP.sites[nearId as SiteId];
         const done = (kind === 'scan' && scannedRef.current.includes(nearId)) || (kind === 'collect' && collectedRef.current.includes(nearId));
-        if (!done) { pop('ping', ns.x, ns.y); vibrate(12); }
+        if (!done) { pop('ping', ns.x, ns.y); vibrate(12); audio.play('detect'); }
       }
       prevNear = nearId;
       // the faulty valve stays marked while the pressure panel is open
@@ -553,6 +573,24 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
           inShadow: res.inShadow, deep: res.deep, shake: shake.current, vis: v, motion: mo, labels, zoom,
         });
       }
+      // ---- sound: one managed voice per continuous sound, updated ~20×/s; silent whenever not driving ----
+      const zone = res.deep ? 2 : res.inShadow ? 1 : 0;
+      if (active && !frozen) {
+        if (prevZone >= 0 && zone !== prevZone) audio.play(zone > prevZone ? 'shadowIn' : 'shadowOut');
+        prevZone = zone;
+      }
+      const drillingNow = active && kind === 'collect' && drillHeld.current && drill.current > 0;
+      if (drillingNow && !drilling) audio.play('drillStart');
+      drilling = drillingNow;
+      audioTimer += dt;
+      if (audioTimer > 0.05 || !active) {
+        audioTimer = 0;
+        const speed = Math.min(1, Math.hypot(rover.current.vx, rover.current.vy) / ROVER.maxSpeed);
+        audio.loop('motor', active && !frozen && res.moving ? 0.35 + 0.65 * speed : 0, 0.8 + 0.4 * speed);
+        audio.loop('drill', drillingNow ? 1 : 0);
+        audio.loop('cabin', active ? 1 : 0);
+      }
+
       hudTimer += dt;
       if (hudTimer > 0.1) {
         hudTimer = 0;
@@ -563,7 +601,11 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => { alive = false; cancelAnimationFrame(raf); ro?.disconnect(); window.removeEventListener('resize', measure); };
+    return () => {
+      alive = false; cancelAnimationFrame(raf); ro?.disconnect(); window.removeEventListener('resize', measure);
+      // leaving the rover screen (or re-running this effect) always releases the continuous sounds
+      audio.stopLoop('motor'); audio.stopLoop('drill'); audio.stopLoop('cabin');
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, def, targetSites, fx, warn]);
 
@@ -668,7 +710,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
               <p className="ex-tip">{touchUI ? t('ex.touch.controls') : t('ex.controls')}</p>
               {touchUI && portrait && <p className="ex-tip ex-rotate">{t('ex.touch.rotate')}</p>}
               <div className="ex-actions">
-                <button className="btn btn-primary" autoFocus onClick={() => setPhase('play')}>{t('ex.start')}</button>
+                <button className="btn btn-primary" data-sfx="custom" autoFocus onClick={() => setPhase('play')}>{t('ex.start')}</button>
                 <button className="btn" onClick={() => onExit({ success: false, failures })}>{t('ex.later')}</button>
               </div>
               {guideButtons}
@@ -725,6 +767,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
                 <>
                   <h2>{t('ex.paused')}</h2>
                   {(guidance || resumeGuide) && <LangToggle className="tutorial-rover-lang" />}
+                  <SoundControl className="ex-sound" />
                   <div className="ex-actions col">
                     <button className="btn btn-primary" autoFocus onClick={() => setPause(false)}>{t('ex.resume')}</button>
                     <button className="btn" onClick={() => setConfirmRestart(true)}>{t('ex.restart')}</button>
@@ -898,7 +941,7 @@ function ActionButton({ label, hold, progress, onDown, onUp }: { label: string; 
   useEffect(() => () => upRef.current(), []);
   const C = 2 * Math.PI * 44;
   return (
-    <button type="button" className={`touch-btn action-btn ${pressed ? 'pressed' : ''} ${hold ? 'hold' : ''}`} data-tutorial-target="rover-action" aria-label={label}
+    <button type="button" data-sfx="none" className={`touch-btn action-btn ${pressed ? 'pressed' : ''} ${hold ? 'hold' : ''}`} data-tutorial-target="rover-action" aria-label={label}
       onPointerDown={(e) => { if (owner.current !== null) return; owner.current = e.pointerId; capture(e); setPressed(true); onDown(); }}
       onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up} onContextMenu={(e) => e.preventDefault()}>
       {hold && (
@@ -942,7 +985,7 @@ function PressureView({ game, sel, vent, onSelect, onHold, labels }: {
               <div className="g-val">{Math.round(gg.p)}</div>
               <div className="g-btns">
                 {([1, -1] as const).map((d) => (
-                  <button key={d} type="button" className="g-btn" aria-label={`${labels.gauge} ${i + 1} ${d > 0 ? '▲' : '▼'}`}
+                  <button key={d} type="button" data-sfx="none" className="g-btn" aria-label={`${labels.gauge} ${i + 1} ${d > 0 ? '▲' : '▼'}`}
                     onPointerDown={(e) => { e.preventDefault(); capture(e); onHold(i, d); }}
                     onPointerUp={() => onHold(i, 0)} onPointerCancel={() => onHold(i, 0)} onLostPointerCapture={() => onHold(i, 0)}
                     onContextMenu={(e) => e.preventDefault()}>

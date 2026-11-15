@@ -4,6 +4,7 @@ import { DEFAULT_DIFFICULTY, missionFor, type DifficultyId } from './game/diffic
 import { applyExpedition, createInitialState } from './game/engine';
 import { browserStorage, clearSave, hasProgress, loadGame, saveGame, SAVE_VERSION } from './game/save';
 import type { GameState } from './game/types';
+import { audio } from './audio/engine';
 import { useI18n } from './i18n/I18n';
 import { learn, startTutorial, TUTORIAL_PREF_KEY, type TutorialEvent, type TutorialProgress } from './tutorial/progress';
 import { ExploreScreen } from './ui/ExploreScreen';
@@ -67,6 +68,14 @@ export default function App() {
     const next = learn(previous.tutorial, event);
     return next === previous.tutorial ? previous : { ...previous, tutorial: next };
   }), [updateRun]);
+
+  // Tutorial finished: a short celebration, once (not when a finished tutorial is loaded from the save).
+  const tutorialStatus = useRef({ run: practicing, status: tutorial?.status });
+  useEffect(() => {
+    const prev = tutorialStatus.current;
+    if (prev.run === practicing && tutorial?.status === 'complete' && prev.status && prev.status !== 'complete') audio.play('tutorialDone');
+    tutorialStatus.current = { run: practicing, status: tutorial?.status };
+  }, [practicing, tutorial?.status]);
 
   // Autosave while a game is open. During exploration the base state is unchanged, so the save is
   // the last safe base state (checkpoint) plus the id of the expedition in progress.
