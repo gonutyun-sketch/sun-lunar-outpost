@@ -30,12 +30,13 @@ export function SoundControl({ className = '' }: { className?: string }) {
     window.addEventListener('keydown', esc, true);
     return () => { window.removeEventListener('pointerdown', away, true); window.removeEventListener('keydown', esc, true); };
   }, [open]);
-  const muted = !s.on || s.volume === 0;
+  const audibleLevel = s.volume || (s.music ? s.musicVolume : 0);
+  const muted = !s.on || audibleLevel === 0;
   return (
     <div ref={box} className={`sound-control ${className}`}>
       <button type="button" className="icon-btn sound-btn" aria-expanded={open} aria-haspopup="dialog"
-        title={t('sound.title')} aria-label={`${t('sound.title')}: ${muted ? t('sound.off') : `${s.volume}%`}`} onClick={() => setOpen(!open)}>
-        <Speaker on={!muted} /><span className="sound-label">{muted ? t('sound.off') : `${s.volume}%`}</span>
+        title={t('sound.title')} aria-label={`${t('sound.title')}: ${muted ? t('sound.off') : `${audibleLevel}%`}`} onClick={() => setOpen(!open)}>
+        <Speaker on={!muted} /><span className="sound-label">{muted ? t('sound.off') : `${audibleLevel}%`}</span>
       </button>
       {open && (
         <div className="sound-panel" role="dialog" aria-label={t('sound.title')}>

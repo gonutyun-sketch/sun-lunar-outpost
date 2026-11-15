@@ -18,11 +18,17 @@ export const PROGRESSION: { bass: number; pad: number[] }[] = [
 const BELLS = [74, 76, 78, 81, 83, 86, 88, 90];
 export const CHORD_SECONDS = 11;
 const LOOKAHEAD = 4;
+const START_LEAD = 0.12;
+const FADE_IN = 2.5;
+const FADE_OUT = 0.18;
+const impulses = new WeakMap<AudioContext, AudioBuffer>();
 
 export interface MusicHandle { stop(): void; readonly chords: number }
 
-function impulse(ctx: AudioContext, seconds: number) {
-  const len = Math.floor(ctx.sampleRate * seconds);
+function impulse(ctx: AudioContext) {
+  const cached = impulses.get(ctx);
+  if (cached) return cached;
+  const len = Math.floor(ctx.sampleRate * 4.5);
   const buf = ctx.createBuffer(2, len, ctx.sampleRate);
   for (let ch = 0; ch < 2; ch++) {
     const d = buf.getChannelData(ch);
@@ -32,6 +38,7 @@ function impulse(ctx: AudioContext, seconds: number) {
       d[i] = ((seed / 0x7fffffff) * 2 - 1) * Math.pow(1 - i / len, 2.6);
     }
   }
+  impulses.set(ctx, buf);
   return buf;
 }
 
@@ -41,21 +48,29 @@ function impulse(ctx: AudioContext, seconds: number) {
  */
 export function startMusic(ctx: AudioContext, out: AudioNode, random: () => number = Math.random): MusicHandle {
   const nodes: AudioNode[] = [];
+  const voices = new Map<OscillatorNode, { gain: GainNode; end: number }>();
   const keep = <T extends AudioNode>(n: T) => { nodes.push(n); return n; };
+  const dispose = (o: OscillatorNode) => {
+    const v = voices.get(o);
+    if (!v) return;
+    voices.delete(o);
+    o.onended = null;
+    try { v.gain.disconnect(); o.disconnect(); } catch { /* already disconnected */ }
+  };
   // shared space: lowpassed bus → dry + long reverb + slow echo for the bells
   // own fade stage, so a stopped instance goes quiet even though notes were scheduled ahead
   const inst = keep(ctx.createGain());
-  inst.gain.setValueAtTime(0.0001, ctx.currentTime);
-  inst.gain.linearRampToValueAtTime(1, ctx.currentTime + 2.5);
+  const started = ctx.currentTime;
+  inst.gain.setValueAtTime(0.0001, started);
+  inst.gain.linearRampToValueAtTime(1, started + FADE_IN);
   inst.connect(out);
   const bus = keep(ctx.createGain()); bus.gain.value = 1;
   const tone = keep(ctx.createBiquadFilter()); tone.type = 'lowpass'; tone.frequency.value = 2400;
   bus.connect(tone); tone.connect(inst);
-  let reverb: AudioNode | null = null;
   try {
-    const conv = keep(ctx.createConvolver()); conv.buffer = impulse(ctx, 4.5);
+    const conv = keep(ctx.createConvolver()); conv.buffer = impulse(ctx);
     const wet = keep(ctx.createGain()); wet.gain.value = 0.55;
-    tone.connect(conv); conv.connect(wet); wet.connect(inst); reverb = conv;
+    tone.connect(conv); conv.connect(wet); wet.connect(inst);
   } catch { /* reverb optional */ }
   const bellBus = keep(ctx.createGain()); bellBus.gain.value = 1;
   bellBus.connect(bus);
@@ -73,8 +88,11 @@ export function startMusic(ctx: AudioContext, out: AudioNode, random: () => numb
     g.gain.setValueAtTime(gain, t0 + attack + hold);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + hold + release);
     o.connect(g); g.connect(dest);
-    o.start(t0); o.stop(t0 + attack + hold + release + 0.05);
-    o.onended = () => { try { g.disconnect(); o.disconnect(); } catch { /* ignore */ } };
+    const end = t0 + attack + hold + release + 0.05;
+    voices.set(o, { gain: g, end });
+    o.onended = () => dispose(o);
+    o.start(t0);
+    o.stop(end);
   };
 
   let chords = 0;
@@ -100,7 +118,10 @@ export function startMusic(ctx: AudioContext, out: AudioNode, random: () => numb
 
   const tick = () => {
     if (ctx.state !== 'running') return; // suspended (hidden tab): the clock is frozen, so is the music
-    while (next < ctx.currentTime + LOOKAHEAD) {
+    const now = ctx.currentTime;
+    // A late timer must not start expired envelopes or stack several chords on one sample.
+    if (next < now + START_LEAD) next = now + START_LEAD;
+    while (next < now + LOOKAHEAD) {
       scheduleChord(next, PROGRESSION[chords % PROGRESSION.length]);
       next += CHORD_SECONDS;
     }
@@ -114,12 +135,21 @@ export function startMusic(ctx: AudioContext, out: AudioNode, random: () => numb
       if (stopped) return;
       stopped = true;
       clearInterval(timer);
+      const now = ctx.currentTime;
+      const end = now + FADE_OUT;
       try {
-        inst.gain.cancelScheduledValues(ctx.currentTime);
-        inst.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
+        const fade = Math.min(1, Math.max(0, (now - started) / FADE_IN));
+        inst.gain.cancelScheduledValues(now);
+        inst.gain.setValueAtTime(0.0001 + 0.9999 * fade, now);
+        inst.gain.linearRampToValueAtTime(0, end);
       } catch { /* ignore */ }
-      // release the shared nodes once the fade is over (scheduled notes then play into nothing)
-      setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch { /* ignore */ } } void reverb; }, 2500);
+      for (const [source, v] of voices) {
+        try { source.stop(Math.min(v.end, end)); } catch { /* already ended */ }
+      }
+      setTimeout(() => {
+        for (const source of voices.keys()) dispose(source);
+        for (const n of nodes) { try { n.disconnect(); } catch { /* ignore */ } }
+      }, 240);
     },
   };
 }

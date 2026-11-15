@@ -4,7 +4,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUDIO_KEY, AudioEngine, DEFAULT_AUDIO, masterGain, MAX_MASTER, MAX_VOICES, musicGain, readAudioSettings, type AudioSettings } from './engine';
-import { CHORD_SECONDS } from './music';
+import { CHORD_SECONDS, startMusic } from './music';
 import { LOOPS, SFX } from './sfx';
 
 class Param {
@@ -24,21 +24,24 @@ class Node {
 }
 class Source extends Node {
   started = false; stopped = false; onended: (() => void) | null = null;
+  startAt = 0; stopAt = 0;
   frequency = new Param(); detune = new Param(); type = 'sine'; buffer: unknown = null; loop = false;
-  start() { this.started = true; }
-  stop() { this.stopped = true; }
+  start(when = 0) { this.started = true; this.startAt = when; }
+  stop(when = 0) { this.stopped = true; this.stopAt = when; }
 }
 class FakeCtx {
   state: 'running' | 'suspended' | 'closed' = 'running';
   currentTime = 0; sampleRate = 8000; destination = new Node();
   onstatechange: (() => void) | null = null;
   sources: Source[] = [];
+  limiter: (Node & { curve: Float32Array | null }) | null = null;
   createGain() { const n = Object.assign(new Node(), { gain: new Param() }); return n; }
   createOscillator() { const s = new Source(); this.sources.push(s); return s; }
   createBufferSource() { const s = new Source(); this.sources.push(s); return s; }
   createBiquadFilter() { return Object.assign(new Node(), { type: 'lowpass', frequency: new Param(), Q: new Param() }); }
   createConvolver() { return Object.assign(new Node(), { buffer: null as unknown }); }
   createDelay() { return Object.assign(new Node(), { delayTime: new Param() }); }
+  createWaveShaper() { return (this.limiter = Object.assign(new Node(), { curve: null })); }
   createDynamicsCompressor() { return Object.assign(new Node(), { threshold: new Param(), ratio: new Param(), attack: new Param(), release: new Param() }); }
   createBuffer(_c: number, len: number) { const d = new Float32Array(Math.min(len, 64)); return { getChannelData: () => d }; }
   resume() { this.state = 'running'; this.onstatechange?.(); return Promise.resolve(); }
@@ -128,6 +131,19 @@ describe('playback rules', () => {
     const played = names.map((n) => e.play(n)).filter(Boolean).length;
     expect(played).toBe(MAX_VOICES);
     expect(e.play('alertCritical')).toBe(true);
+    expect(e.play('alertCaution')).toBe(true);
+    expect(e.play('victory')).toBe(false);
+  });
+
+  it('the output limiter preserves ordinary levels and caps peaks below full scale', () => {
+    const { e, ctx } = engine();
+    e.unlock();
+    const curve = ctx.limiter!.curve!;
+    const center = (curve.length - 1) / 2;
+    expect(curve[center]).toBe(0);
+    expect(curve[center + 128]).toBeCloseTo(0.5, 5);
+    expect(curve[center - 128]).toBeCloseTo(-0.5, 5);
+    expect(Math.max(...curve.map(Math.abs))).toBeLessThan(0.97);
   });
 
   it('every effect builds without errors and stops its own nodes', () => {
@@ -176,6 +192,38 @@ describe('continuous sounds (motor, drill, ambience)', () => {
     expect(voice.every((s) => s.connected === 0)).toBe(true);
   });
 
+  it('a released drill fades out and retires even when the mission stays open', () => {
+    const { e, ctx } = engine();
+    e.setSettings({ music: false });
+    e.unlock();
+    e.loop('drill', 1);
+    const voice = [...ctx.sources];
+    e.loop('drill', 0);
+    vi.advanceTimersByTime(100);
+    e.loop('drill', 1);
+    expect(ctx.sources).toEqual(voice);
+    vi.advanceTimersByTime(300);
+    expect(e.activeLoops).toEqual(['drill']);
+    e.loop('drill', 0);
+    vi.advanceTimersByTime(700);
+    expect(e.activeLoops).toEqual([]);
+    expect(voice.every(s => s.stopped && s.connected === 0)).toBe(true);
+  });
+
+  it('does not queue new motor frequency automation at a steady speed', () => {
+    const { e, ctx } = engine();
+    e.setSettings({ music: false });
+    e.unlock();
+    e.loop('motor', 0.8, 1.1);
+    for (let i = 0; i < 100; i++) {
+      ctx.currentTime += 0.1;
+      e.loop('motor', 0.8, 1.1);
+    }
+    expect(ctx.sources.slice(0, 3).map(s => s.frequency.calls)).toEqual([1, 1, 1]);
+    e.loop('motor', 0.8, 1.21);
+    expect(ctx.sources.slice(0, 3).map(s => s.frequency.calls)).toEqual([2, 2, 2]);
+  });
+
   it('muting stops the loops; unmuting brings back the ones still wanted; stopped ones stay stopped', () => {
     const { e } = engine();
     e.unlock();
@@ -207,6 +255,32 @@ describe('continuous sounds (motor, drill, ambience)', () => {
     expect(ctx.state).toBe('suspended');
     expect(e.play('click')).toBe(false); // nothing is queued while hidden
     e.setHidden(false);
+    expect(ctx.state).toBe('running');
+  });
+
+  it('keeps the same music graph when a hidden tab returns', () => {
+    const { e, ctx } = engine();
+    e.unlock();
+    const n = ctx.sources.length;
+    e.setHidden(true);
+    e.setSettings({ volume: 45 });
+    expect(e.musicPlaying).toBe(true);
+    e.setHidden(false);
+    expect(ctx.state).toBe('running');
+    expect(ctx.sources.length).toBe(n);
+  });
+
+  it('resumes if the page becomes visible before suspend finishes', async () => {
+    const { e, ctx } = engine();
+    e.unlock();
+    let finish!: () => void;
+    ctx.suspend = () => new Promise<void>(resolve => {
+      finish = () => { ctx.state = 'suspended'; resolve(); };
+    });
+    e.setHidden(true);
+    e.setHidden(false);
+    finish();
+    await Promise.resolve();
     expect(ctx.state).toBe('running');
   });
 
@@ -243,6 +317,19 @@ describe('background music', () => {
     ctx.currentTime += CHORD_SECONDS * 3;
     vi.advanceTimersByTime(3000);
     expect(ctx.sources.length).toBe(frozen);
+  });
+
+  it('recovers from a late music timer without creating voices in the past', () => {
+    const ctx = new FakeCtx();
+    const music = startMusic(ctx as unknown as AudioContext, ctx.destination as unknown as AudioNode, () => 0);
+    const initial = ctx.sources.length;
+    ctx.currentTime = CHORD_SECONDS * 3;
+    vi.advanceTimersByTime(1000);
+    expect(music.chords).toBe(2);
+    expect(ctx.sources.slice(initial).every(s => s.startAt > ctx.currentTime)).toBe(true);
+    music.stop();
+    vi.advanceTimersByTime(300);
+    expect(ctx.sources.every(s => s.stopped && s.connected === 0)).toBe(true);
   });
 
   it('music off, music volume 0 or all sound off stops it; turning it back on restarts it', () => {
