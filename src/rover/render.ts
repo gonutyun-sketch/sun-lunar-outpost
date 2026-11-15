@@ -87,9 +87,8 @@ function drawVehicle(g: CanvasRenderingContext2D, r: Rover, f: FrameInfo) {
   });
   g.restore();
   const status = level === 0 ? ink.mint : level === 1 ? ink.amber : ink.red;
-  const blink = f.motion && level > 0 && Math.floor(f.t * (level === 2 ? 5 : 3)) % 2 === 0;
   const [lampX, lampY] = roverPoint(r.angle, -6, -4.5, 9.6 - lean / 4);
-  dot(g, cell(x + lampX * 2), cell(y + lampY * 2), blink ? '#80515b' : status, 4, 2);
+  dot(g, cell(x + lampX * 2), cell(y + lampY * 2), status, 4, 2);
   if (s < -0.05 && f.motion && f.vis.accel < -90 && f.vis.speed > 12) {
     for (const side of [-3.8, 3.8]) {
       const [brakeX, brakeY] = roverPoint(r.angle, -11.8, side, 6.9 - lean / 2);
@@ -326,7 +325,7 @@ export function drawFrame(g: CanvasRenderingContext2D, width: number, height: nu
   const level = batteryLevel(r.battery);
   if (f.deep || level > 0) {
     const tone = level > 0 ? (level === 2 ? '#ce4d6c85' : '#ce73696b') : '#5885bd80';
-    const w = f.motion && Math.floor(f.t * 3) % 2 ? 6 : 4;
+    const w = 4;
     g.fillStyle = tone;
     g.fillRect(0, 0, width, w);
     g.fillRect(0, height - w, width, w);

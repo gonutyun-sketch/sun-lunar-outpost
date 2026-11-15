@@ -494,7 +494,8 @@ html[lang='ko'] h1, html[lang='ko'] h2 { letter-spacing: 0.01em; }
 .ex-prompt { text-align: center; font-weight: 700; color: var(--green); opacity: 0; transition: opacity 0.15s; }
 .ex-prompt.show { opacity: 1; animation: blink 1.2s ease-in-out infinite; }
 .ex-prompt:not(.show):not(:empty) { opacity: 1; color: var(--muted); }
-.ex-warn b { color: #9fb6e0; } .ex-warn b.crit { color: var(--red); animation: blink 0.9s ease-in-out infinite; }
+.ex-warn { min-height: calc(1lh + 6px); }
+.ex-warn b { color: #9fb6e0; } .ex-warn b.crit { color: var(--red); }
 /* circuit puzzle */
 .circuit { width: 100%; max-width: 400px; margin: 8px auto; display: block; }
 .cz-tile .cz-board { stroke-width: 2; }
@@ -750,15 +751,11 @@ html.touch button, html.touch .gauge, html.touch .cz-tile { touch-action: manipu
 @keyframes cz-current { to { stroke-dashoffset: -14; } }
 .circuit.solved { animation: cz-solved 0.9s ease 2; }
 @keyframes cz-solved { 50% { filter: drop-shadow(0 0 14px rgba(86, 199, 242, 0.9)); } }
-/* Battery HUD: blink when critical */
-.ex-battery.crit { animation: bat-crit 0.7s steps(2, jump-none) infinite; }
-@keyframes bat-crit { 50% { box-shadow: inset 0 0 0 2px var(--red), 0 0 18px rgba(255, 107, 122, 0.45); } }
 /* Joystick: larger invisible hit area so a thumb that lands near the stick still grabs it */
 .touch-stick::before { content: ""; position: absolute; inset: -26px; border-radius: 50%; }
 @media (prefers-reduced-motion: reduce) {
   .cz-flow line, .cz-flow-wire { animation: none; stroke-dasharray: none; opacity: 0.6; }
-  .circuit.solved, .ex-battery.crit { animation: none; }
-  .ex-battery.crit { box-shadow: inset 0 0 0 2px var(--red); }
+  .circuit.solved { animation: none; }
 }
 
 /* Lunar flight controls */
@@ -939,7 +936,7 @@ html.touch button, html.touch .gauge, html.touch .cz-tile { touch-action: manipu
 .ex-distance { display: inline-block; color: #e6eef2; font: 700 12px/1.2 ui-monospace, monospace; padding: 2px 5px; margin-inline-start: 7px; border: 1px solid #5d6478; background: #202a3e; white-space: nowrap; }
 .ex-obj:empty::before, .ex-progress-short { display: none; }
 .ex-battery { background: #101929; border: 1px solid #526078; padding: 5px 8px; }
-.ex-battery.crit { box-shadow: inset 0 0 0 1px var(--red); }
+.ex-battery.crit { box-shadow: inset 0 0 0 2px var(--red); }
 .ex-step { background: #141d2e; border-color: #42536c; }
 .ex-step.now { background: #353229; border-color: #a68b55; }
 .ex-scenario { border-radius: 2px; color: #d3deed; background: #141b2ae8; }

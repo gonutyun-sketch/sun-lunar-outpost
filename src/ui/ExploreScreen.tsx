@@ -135,7 +135,6 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
   const [touchGuide, setTouchGuide] = useState(prefersTouch);
   touchRef.current = touchUI;
   const [portrait, setPortrait] = useState(() => typeof window !== 'undefined' && window.innerHeight > window.innerWidth);
-  const viewSize = useRef({ w: 0, h: 0 });
 
   // Mission 1: circuit
   const [circuit, setCircuit] = useState<Circuit>(createCircuit);
@@ -366,15 +365,13 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
   useEffect(() => {
     const cv = canvasRef.current!, g = cv.getContext('2d')!;
     let raf = 0, last = performance.now(), hudTimer = 0, gaugeTimer = 0;
-    // CSS size of the view; the backing store is CSS size × capped DPR (never stretched)
+    let box = { w: 0, h: 0, pixelW: 1, pixelH: 1 };
     const measure = () => {
       const wrap = wrapRef.current;
       if (!wrap) return;
-      const { clientWidth: width, clientHeight: height } = wrap;
-      viewSize.current = { w: width, h: height };
+      const { clientWidth: w, clientHeight: h } = wrap;
       const dpr = renderDpr(window.devicePixelRatio);
-      const W = Math.max(1, Math.floor(width * dpr)), H = Math.max(1, Math.floor(height * dpr));
-      if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+      box = { w, h, pixelW: Math.max(1, Math.floor(w * dpr)), pixelH: Math.max(1, Math.floor(h * dpr)) };
     };
     measure();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
@@ -510,7 +507,6 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
       if (trackPrune > 1) { trackPrune = 0; pruneTracks(v, tNow); }
       shake.current = mo ? Math.max(0, shake.current - dt * 20) : 0;
 
-      const box = viewSize.current;
       if (!box.w) measure();
       const zoom = cameraZoom(box.w, box.h);
       updateCamera(v.cam, rover.current, box.w / zoom, box.h / zoom, MAP.w, MAP.h, dt);
@@ -542,8 +538,12 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, tea
 
       // Full frame rate while driving; when paused or behind a menu/briefing, redraw at ~12 fps to save battery
       idle += dt;
-      if (active || idle > 1 / 12) {
+      const resized = cv.width !== box.pixelW || cv.height !== box.pixelH;
+      if (active || resized || idle > 1 / 12) {
         idle = 0;
+        // A backing-store resize clears the canvas. Repaint it before the browser can show that frame.
+        if (cv.width !== box.pixelW) cv.width = box.pixelW;
+        if (cv.height !== box.pixelH) cv.height = box.pixelH;
         g.setTransform(cv.width / Math.max(1, box.w), 0, 0, cv.height / Math.max(1, box.h), 0, 0);
         drawFrame(g, box.w, box.h, MAP, rover.current, {
           t: tNow, targets: guides.length ? [...markers, ...guides] : markers, solarRepaired: def.id !== 'solarRepair' || isSolved(circuitRef.current),
