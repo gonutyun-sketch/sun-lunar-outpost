@@ -5,7 +5,7 @@
  *   await __play.toEnd()      // play until the results screen
  * Base decisions follow simple rules (Solar upgrade at shift 2, lab when power allows, greenhouse when food < 50,
  * first emergency option; when power is short: lab off, greenhouse off, then oxygen off if O2 >= 45).
- * Start a game first (menu -> difficulty -> start). If the browser pane is hidden or slow, add a frame shim first:
+ * Start a game first (menu -> difficulty -> start without the guide). If the browser pane is hidden or slow, add a frame shim first:
  *   window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16) Rover missions are completed with shortcuts: the rover is placed at each site, the
  * circuit is solved by trying rotations, the pressure gauges are set into their bands. Driving and the
  * minigames themselves are covered by unit tests and the touch/keyboard play-tests.

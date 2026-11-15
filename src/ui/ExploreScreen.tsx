@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { difficultyOf, missionFor, type DifficultyId } from '../game/difficulty';
-import { useI18n } from '../i18n/I18n';
+import { LangToggle, useI18n } from '../i18n/I18n';
 import type { Key } from '../i18n/translate';
 import { createCircuit, isSolved, powered, rotateTile, targetMasks, wrongTiles, N, E, S, W, type Circuit } from '../rover/circuit';
 import { createPressureGame, inBand, stepPressure, type PressureGame } from '../rover/pressure';
@@ -15,6 +15,9 @@ import { DOCK, ROUTES, routeEstimate, type Pt } from '../rover/routes';
 import { createRover, dist, ROVER, stepRover, type Input, type Rover } from '../rover/sim';
 import { cameraZoom, joystickVector, knobOffset, renderDpr } from '../rover/touch';
 import { MAP, type Site } from '../rover/world';
+import { learnedToMove, type TutorialEvent, type TutorialProgress } from '../tutorial/progress';
+import { roverMessage } from './roverTutorial';
+import { TutorialGuide } from './TutorialGuide';
 import { useWarningQueue, WarningBanner, type MissionWarning } from './WarningBanner';
 
 type SiteId = Site['id'];
@@ -61,6 +64,8 @@ interface Props {
   difficulty: DifficultyId;
   onExit: (result: { success: boolean; failures: number }) => void;
   fx: boolean;
+  tutorial: TutorialProgress | null;
+  teach: (event: TutorialEvent) => void;
 }
 
 interface Hud { battery: number; rate: number; zone: 'sun' | 'shadow' | 'deep' | 'charge'; near: SiteId | null; time: number; drill: number; distance: number | null }
@@ -85,7 +90,7 @@ const buzz = (pattern: number | number[]) => {
   try { navigator.vibrate?.(pattern); } catch { /* not supported */ }
 };
 
-export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
+export function ExploreScreen({ missionId, difficulty, onExit, fx, tutorial, teach }: Props) {
   const { t } = useI18n();
   const def = MISSIONS[missionId];
   const diffCfg = difficultyOf(difficulty);
@@ -96,6 +101,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
   /** Battery drain per second shown to the player (training values x difficulty). */
   const rateOf = (v: number) => Number((v * tune.drainScale).toFixed(2));
   const newPressure = () => createPressureGame({ bandPad: tune.pressureBandPad, hold: tune.pressureHold, wobbleScale: tune.wobbleScale });
+  const tutorialScope = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const rover = useRef<Rover>(createRover(MAP, tune.batteryStart));
@@ -126,6 +132,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
   const shadowAlerted = useRef(0);
   const [hud, setHud] = useState<Hud>({ battery: tune.batteryStart, rate: ROVER.sunCharge, zone: 'sun', near: null, time: 0, drill: 0, distance: null });
   const [touchUI, setTouchUI] = useState(prefersTouch);
+  const [touchGuide, setTouchGuide] = useState(prefersTouch);
   touchRef.current = touchUI;
   const [portrait, setPortrait] = useState(() => typeof window !== 'undefined' && window.innerHeight > window.innerWidth);
   const viewSize = useRef({ w: 0, h: 0 });
@@ -154,6 +161,12 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
   const drill = useRef(0);
   const drillHeld = useRef(false);
   const drillSite = useRef<SiteId | null>(null);
+  const guideAvailable = !!tutorial && (!tutorial.rover.docked || (missionId === 'solarRepair' && !tutorial.rover.solar));
+  const guidance = guideAvailable && tutorial.status === 'active' ? tutorial : null;
+  const shouldTrackMove = !!guidance && !guidance.rover.moved && phase === 'play' && !paused;
+  useEffect(() => {
+    if (shouldTrackMove && learnedToMove(rover.current, MAP.start)) teach({ type: 'rover', skill: 'moved' });
+  }, [shouldTrackMove, hud.time, teach]);
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -269,6 +282,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
     if (n === c) return;
     circuitRef.current = n;
     setCircuit(n);
+    teach({ type: 'rover', skill: 'rotated' });
     rover.current = { ...rover.current, battery: Math.max(0, rover.current.battery - tuneRef.current.rotateCost) };
     if (isSolved(n)) {
       setFlash(t('ex.pz.solved'));
@@ -283,7 +297,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
       }, 1100);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [def, t]);
+  }, [def, t, teach]);
 
   // ---------- keyboard ----------
   useEffect(() => {
@@ -291,6 +305,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
       KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
     };
     const down = (e: KeyboardEvent) => {
+      if ((e.code === 'Enter' || e.code === 'Space') && e.target instanceof Element && e.target.closest('.tutorial-guide button, [data-tutorial-button]')) return;
       const p = phaseRef.current;
       const kind = def.steps[stepRef.current]?.kind;
       if (p === 'brief' && (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyE')) { e.preventDefault(); setPhase('play'); return; }
@@ -319,7 +334,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
         return;
       }
       const k = keymap[e.code];
-      if (k) { e.preventDefault(); input.current[k] = true; }
+      if (k) { e.preventDefault(); input.current[k] = true; setTouchGuide(false); }
       if (e.code === 'KeyE' && kind === 'collect') { e.preventDefault(); drillHeld.current = true; return; }
       if (e.code === 'KeyE') { e.preventDefault(); interact(); }
     };
@@ -553,7 +568,11 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
   }, [t, def, targetSites, fx, warn]);
 
   // ---------- touch controls ----------
-  const onStick = (ax: number, ay: number) => { const d = snapDirection(ax, ay); input.current.ax = d.x; input.current.ay = d.y; };
+  const onStick = (ax: number, ay: number) => {
+    const d = snapDirection(ax, ay);
+    if (d.x || d.y) setTouchGuide(true);
+    input.current.ax = d.x; input.current.ay = d.y;
+  };
   const onActionDown = () => {
     if (def.steps[stepRef.current]?.kind === 'collect') drillHeld.current = true;
     else interact();
@@ -580,17 +599,31 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
     : step.kind === 'scan' ? (scanned.includes(hud.near) ? null : t('ex.touch.scan'))
     : step.kind === 'collect' ? (collected.includes(hud.near) ? null : t('ex.touch.drill'))
     : step.kind === 'dock' ? t('ex.touch.dock') : null;
+  const nearTarget = !!actionLabel && !!hud.near && targetSites().includes(hud.near) && dist(rover.current, MAP.sites[hud.near]) <= MAP.sites[hud.near].r;
+  const guide = guidance && !paused && (driving || step.kind === 'circuit' && playing || phase === 'success')
+    ? roverMessage(guidance, tune, { step: step.kind, touch: touchGuide, touchUI, near: nearTarget, tile: rotIdx[cursor], success: phase === 'success', solar: missionId === 'solarRepair' }, teach)
+    : null;
+  const pauseGuide = () => teach({ type: 'pause' });
+  const skipGuide = () => teach({ type: 'skip' });
+  const resumeGuide = guideAvailable && tutorial.status === 'paused';
+  const guideButtons = (resumeGuide || guidance) && (
+    <div className="tutorial-rover-options">
+      {resumeGuide && <button type="button" className="btn" data-tutorial-button onClick={() => teach({ type: 'resume' })}>{t('tut.resume')}</button>}
+      <button type="button" className="btn" data-tutorial-button onClick={skipGuide}>{t('tut.skip')}</button>
+    </div>
+  );
 
   return (
-    <div className={`explore screen ${fx ? '' : 'no-fx'} ${touchUI ? 'touch' : ''}`}
-      onPointerDown={(e) => { if (e.pointerType === 'touch' && !touchUI) setTouchUI(true); }}
+    <div ref={tutorialScope} className={`explore screen ${fx ? '' : 'no-fx'} ${touchUI ? 'touch' : ''}`}
+      onPointerDown={(e) => { if (e.pointerType === 'touch') { setTouchGuide(true); if (!touchUI) setTouchUI(true); } }}
       onContextMenu={(e) => e.preventDefault()}>
       <WarningBanner warning={warning} />
+      <div className="ex-heading">
       <header className="ex-top panel">
         <div className="ex-mission">
           <span className="tag">{t('ex.badge')}</span>
           <h1>{t(def.title)}</h1>
-          <div className="ex-obj">
+          <div className="ex-obj" data-tutorial-target="rover-objective">
             {objective}
             {driving && hud.distance !== null && <span className="ex-distance" title={t('ex.distance')}>{hud.distance} m</span>}
           </div>
@@ -603,7 +636,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
             <span key={i} className={`ex-step ${i < doneIdx ? 'done' : i === doneIdx && playing ? 'now' : ''}`}>{i + 1}. {t(s.chip, { n: collected.length, total: 3 })}</span>
           ))}
         </div>
-        <div className={`ex-battery ${low ? 'low' : ''} ${hud.battery < 10 ? 'crit' : ''}`} title={t('ex.batteryTip')}>
+        <div className={`ex-battery ${low ? 'low' : ''} ${hud.battery < 10 ? 'crit' : ''}`} data-tutorial-target="rover-battery" title={t('ex.batteryTip')}>
           <div className="ex-bat-head">
             <span>{t('ex.battery')}</span>
             <b>{Math.round(hud.battery)}</b>
@@ -613,6 +646,9 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
           <div className={`ex-zone ${hud.zone}`}>{t(`ex.zone.${hud.zone}` as Key)}</div>
         </div>
       </header>
+      {guide && driving && <TutorialGuide message={guide} scope={tutorialScope} onPause={pauseGuide} onSkip={skipGuide} />}
+      {resumeGuide && driving && <button type="button" className="btn tutorial-resume-rover" data-tutorial-button onClick={() => teach({ type: 'resume' })}>{t('tut.resume')}</button>}
+      </div>
 
       <div className="ex-view panel" ref={wrapRef}>
         <canvas ref={canvasRef} className="ex-canvas" aria-label={t('ex.canvasAria')} />
@@ -635,20 +671,23 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
                 <button className="btn btn-primary" autoFocus onClick={() => setPhase('play')}>{t('ex.start')}</button>
                 <button className="btn" onClick={() => onExit({ success: false, failures })}>{t('ex.later')}</button>
               </div>
+              {guideButtons}
             </div>
           </div>
         )}
 
         {playing && step.kind === 'circuit' && (
           <div className="ex-overlay soft">
-            <div className="ex-card panel puzzle">
+            <div className={`ex-card panel puzzle ${guide ? 'tutorial-circuit' : ''}`}>
               <button type="button" className="touch-btn close-btn" aria-label={t('ex.close')} onClick={() => setStep(stepRef.current - 1)}>✕</button>
               <h2>{t('ex.pz.title')}</h2>
-              <p className="ex-tip">{t(touchUI ? 'ex.touch.circuit' : 'ex.pz.help', { cost: tune.rotateCost })}</p>
+              {guide ? <TutorialGuide message={guide} scope={tutorialScope} onSkip={skipGuide} reveal />
+                : <p className="ex-tip">{t(touchUI ? 'ex.touch.circuit' : 'ex.pz.help', { cost: tune.rotateCost })}</p>}
               {tune.circuitHint === 'path' && !isSolved(circuit) && <p className="ex-tip ex-coach">{t('ex.pz.hintPath')}</p>}
               {tune.circuitHint === 'count' && !isSolved(circuit) && <p className="ex-tip ex-coach">{t('ex.pz.hintCount', { n: wrongTiles(circuit) })}</p>}
               <CircuitView c={circuit} cursor={rotIdx[cursor]} hint={tune.circuitHint === 'path'} onRotate={(i) => { setCursor(rotIdx.indexOf(i)); rotate(i); }} labels={{ src: t('ex.pz.source'), sink: t('ex.pz.sink') }} />
               {flash ? <div className="ex-flash">{flash}</div> : !touchUI && <p className="ex-tip">{t('ex.pz.close')}</p>}
+              {resumeGuide && !paused && guideButtons}
             </div>
           </div>
         )}
@@ -680,15 +719,18 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
                     <button className="btn btn-primary" autoFocus onClick={restart}>{t('ex.restart')}</button>
                     <button className="btn" onClick={() => { setConfirmRestart(false); setPause(false); }}>{t('ex.cancel')}</button>
                   </div>
+                  {guideButtons}
                 </>
               ) : (
                 <>
                   <h2>{t('ex.paused')}</h2>
+                  {(guidance || resumeGuide) && <LangToggle className="tutorial-rover-lang" />}
                   <div className="ex-actions col">
                     <button className="btn btn-primary" autoFocus onClick={() => setPause(false)}>{t('ex.resume')}</button>
                     <button className="btn" onClick={() => setConfirmRestart(true)}>{t('ex.restart')}</button>
                     <button className="btn btn-ghost" onClick={() => onExit({ success: false, failures })}>{t('ex.abort')}</button>
                   </div>
+                  {guideButtons}
                 </>
               )}
             </div>
@@ -703,7 +745,8 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
               <p className="ex-reward">{t(def.successDesc, { pct, leak: exp.oxygenLeak ?? 0, reward: exp.rewardResearch ?? 0 })}</p>
               <p className="ex-tip">{t('ex.stats', { t: Math.round(hud.time), b: Math.round(hud.battery) })}</p>
               {failures > 0 && <p className="ex-tip">{t(exp.failOxygenCost ? 'ex.o2.failCost' : 'ex.failCost', { n: failures, cost: failures * exp.failEnergyCost, o2: failures * (exp.failOxygenCost ?? 0) })}</p>}
-              <div className="ex-actions"><button className="btn btn-primary" autoFocus onClick={() => onExit({ success: true, failures })}>{t('ex.back')}</button></div>
+              {guide && <TutorialGuide message={guide} scope={tutorialScope} onSkip={skipGuide} />}
+              <div className="ex-actions"><button className="btn btn-primary" data-tutorial-target="rover-finish" autoFocus onClick={() => onExit({ success: true, failures })}>{t('ex.back')}</button></div>
             </div>
           </div>
         )}
@@ -719,6 +762,7 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
                 <button className="btn btn-primary" autoFocus onClick={restart}>{t('ex.retry')}</button>
                 <button className="btn" onClick={() => onExit({ success: false, failures })}>{t('ex.backFail')}</button>
               </div>
+              {guideButtons}
             </div>
           </div>
         )}
@@ -737,8 +781,8 @@ export function ExploreScreen({ missionId, difficulty, onExit, fx }: Props) {
       )}
 
       <footer className="ex-bottom panel">
-        <span className="ex-keys">{t('ex.controls')}</span>
-        <span className={`ex-prompt ${prompt ? 'show' : ''}`}>{prompt ?? (playing && step.kind === 'circuit' ? t('ex.pz.short') : playing && step.kind === 'pressure' ? t('ex.o2.pz.short') : '')}</span>
+        <span className="ex-keys" data-tutorial-target="rover-keys">{t('ex.controls')}</span>
+        <span className={`ex-prompt ${prompt ? 'show' : ''}`} data-tutorial-target="rover-prompt">{prompt ?? (playing && step.kind === 'circuit' ? t('ex.pz.short') : playing && step.kind === 'pressure' ? t('ex.o2.pz.short') : '')}</span>
         <span className="ex-warn">
           {low && phase !== 'failed' && <b className="crit">{t(hud.battery < 10 ? 'ex.warn.crit' : 'ex.warn.low')}</b>}
           {!low && hud.zone === 'shadow' && <b>{t('ex.warn.shadow')}</b>}
@@ -832,7 +876,7 @@ function TouchStick({ onMove, label }: { onMove: (ax: number, ay: number) => voi
   moveRef.current = onMove;
   useEffect(() => () => moveRef.current(0, 0), []);
   return (
-    <div ref={base} className="touch-stick" role="application" aria-label={label}
+    <div ref={base} className="touch-stick" data-tutorial-target="rover-stick" role="application" aria-label={label}
       onPointerDown={(e) => { if (owner.current !== null) return; owner.current = e.pointerId; capture(e); update(e); }}
       onPointerMove={(e) => { if (e.pointerId === owner.current) update(e); }}
       onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}>
@@ -854,7 +898,7 @@ function ActionButton({ label, hold, progress, onDown, onUp }: { label: string; 
   useEffect(() => () => upRef.current(), []);
   const C = 2 * Math.PI * 44;
   return (
-    <button type="button" className={`touch-btn action-btn ${pressed ? 'pressed' : ''} ${hold ? 'hold' : ''}`} aria-label={label}
+    <button type="button" className={`touch-btn action-btn ${pressed ? 'pressed' : ''} ${hold ? 'hold' : ''}`} data-tutorial-target="rover-action" aria-label={label}
       onPointerDown={(e) => { if (owner.current !== null) return; owner.current = e.pointerId; capture(e); setPressed(true); onDown(); }}
       onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up} onContextMenu={(e) => e.preventDefault()}>
       {hold && (
@@ -932,7 +976,7 @@ function CircuitView({ c, cursor, hint, onRotate, labels }: { c: Circuit; cursor
       .map(([, x, yy], k) => <line key={k} x1={cx} y1={cy} x2={x as number} y2={yy as number} />);
   };
   return (
-    <svg className={`circuit ${solved ? 'solved' : ''}`} viewBox={`0 0 ${O * 2 + S0 * 3} ${S0 * 3 + 20}`} role="group">
+    <svg className={`circuit ${solved ? 'solved' : ''}`} data-tutorial-target="circuit" viewBox={`0 0 ${O * 2 + S0 * 3} ${S0 * 3 + 20}`} role="group">
       <text x={O / 2} y={S0 * 1.5 - 22} textAnchor="middle" className="cz-label">{labels.src}</text>
       <line x1={8} y1={S0 * 1.5} x2={O} y2={S0 * 1.5} className="cz-wire on" />
       <line x1={8} y1={S0 * 1.5} x2={O} y2={S0 * 1.5} className="cz-flow-wire" />
@@ -944,6 +988,7 @@ function CircuitView({ c, cursor, hint, onRotate, labels }: { c: Circuit; cursor
         const x = O + col * S0, yy = r * S0;
         return (
           <g key={i} className={`cz-tile ${tile.rotatable ? 'rot' : ''} ${on.has(i) ? 'on' : ''} ${cursor === i ? 'sel' : ''}`}
+            data-tutorial-target={tile.rotatable ? `circuit-tile-${i}` : undefined}
             onClick={() => tile.rotatable && onRotate(i)} role={tile.rotatable ? 'button' : undefined} tabIndex={-1}>
             <rect x={x + 3} y={yy + 3} width={S0 - 6} height={S0 - 6} className="cz-board" />
             {tile.rotatable && (

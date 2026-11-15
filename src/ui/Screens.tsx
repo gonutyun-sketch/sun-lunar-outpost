@@ -8,6 +8,7 @@ import { LangToggle, useI18n } from '../i18n/I18n';
 import type { Key } from '../i18n/translate';
 import type { OutpostState } from '../art/outpost';
 import { BaseScene } from './BaseScene';
+import { AstronautGuide } from './AstronautGuide';
 import { DifficultyBadge } from './MissionScreen';
 
 /* ---------------- Animated background ---------------- */
@@ -58,8 +59,8 @@ const menuOutpost: OutpostState = {
   upgrades: { solar: false, oxygen: false, battery: false },
 };
 
-export function MainMenu({ onStart, onHow, onCredits, onContinue, slot, notice, fx }: {
-  onStart: () => void; onHow: () => void; onCredits: () => void;
+export function MainMenu({ onStart, onHow, onCredits, onPractice, onContinue, slot, notice, fx }: {
+  onStart: () => void; onHow: () => void; onCredits: () => void; onPractice: () => void;
   /** Present when a saved game exists. */
   onContinue?: () => void; slot?: SaveSlot | null;
   /** One-off message about the save (cleared damaged save, interrupted expedition). */
@@ -88,6 +89,7 @@ export function MainMenu({ onStart, onHow, onCredits, onContinue, slot, notice, 
           ) : (
             <button className="btn btn-primary" onClick={onStart} autoFocus>{t('menu.start')}</button>
           )}
+          <button className="btn menu-practice" onClick={onPractice}>{t('tut.practice')}</button>
           <button className="btn" onClick={onHow}>{t('menu.how')}</button>
           <button className="btn" onClick={onCredits}>{t('menu.credits')}</button>
         </div>
@@ -95,6 +97,36 @@ export function MainMenu({ onStart, onHow, onCredits, onContinue, slot, notice, 
         <div className="menu-foot">{t('menu.foot')}<br /><span className="save-note">{t('save.note')}</span></div>
       </div>
     </div>
+  );
+}
+
+export function TutorialStart({ difficulty = DEFAULT_DIFFICULTY, first = false, onGuided, onDirect, onBack }: {
+  difficulty?: DifficultyId; first?: boolean; onGuided: () => void; onDirect?: () => void; onBack: () => void;
+}) {
+  const { t } = useI18n();
+  const practice = !onDirect;
+  return (
+    <main className="screen info-page tutorial-start">
+      <header>
+        <DifficultyBadge id={difficulty} />
+        <div className="header-actions">
+          <LangToggle />
+          <button type="button" className="btn" onClick={onBack}>{t('common.back')}</button>
+        </div>
+      </header>
+      <section className="panel tutorial-start-card" aria-labelledby="tutorial-start-title">
+        <AstronautGuide mood={practice ? 'happy' : 'ready'} />
+        <div>
+          <h1 id="tutorial-start-title">{t(practice ? 'tut.practice.h' : 'tut.start.h')}</h1>
+          <p>{t(practice ? 'tut.practice.line' : 'tut.start.line')}</p>
+          {!practice && first && difficulty === 'easy' && <small>{t('tut.start.easy')}</small>}
+        </div>
+        <div className="tutorial-start-actions">
+          <button type="button" className={`btn ${first || practice ? 'btn-primary' : ''}`} data-tutorial-start="guided" onClick={onGuided} autoFocus={first || practice}>{t(practice ? 'tut.practice.start' : 'tut.start.with')}</button>
+          {onDirect && <button type="button" className={`btn ${first ? '' : 'btn-primary'}`} data-tutorial-start="direct" onClick={onDirect} autoFocus={!first}>{t('tut.start.direct')}</button>}
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -179,7 +211,7 @@ export function DifficultySelect({ initial, onStart, onBack }: { initial: Diffic
 }
 
 /* ---------------- How to play ---------------- */
-export function HowToPlay({ cfg, onBack, onStart }: { cfg: MissionConfig; onBack: () => void; onStart: () => void }) {
+export function HowToPlay({ cfg, onBack, onStart, onPractice }: { cfg: MissionConfig; onBack: () => void; onStart: () => void; onPractice: () => void }) {
   const { t, tr } = useI18n();
   const MISSION = cfg;
   const f = MISSION.facilities;
@@ -192,6 +224,7 @@ export function HowToPlay({ cfg, onBack, onStart }: { cfg: MissionConfig; onBack
         <div className="header-actions">
           <LangToggle />
           <button className="btn" onClick={onBack}>{t('common.back')}</button>
+          <button className="btn" onClick={onPractice}>{t('tut.practice')}</button>
           <button className="btn btn-primary" onClick={onStart}>{t('common.startMission')}</button>
         </div>
       </header>

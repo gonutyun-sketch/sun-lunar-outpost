@@ -5,6 +5,7 @@
  */
 import site from '../data/site.json';
 import { enLearn } from './en.learn';
+import { enTutorial } from './en.tutorial';
 
 export const en = {
   // Language switch
@@ -599,4 +600,5 @@ export const en = {
   'ex.touch.rotate': "Tip: landscape gives a wider view of the terrain (portrait works too).",
   'ex.close': "Close",
   ...enLearn,
+  ...enTutorial,
 };
