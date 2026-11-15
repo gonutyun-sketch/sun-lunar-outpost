@@ -11,6 +11,7 @@
 - Vector (SVG) illustrations of the lunar base, starfield and Moon — **AI-generated code-drawn artwork**, original, no external image assets.
 - Original code-drawn pixel artwork for the outpost, rover, terrain and mission equipment, plus the updated menu, base and rover interfaces. The raster art is generated locally by the game from its source code.
 - Interactive tutorial with a four-expression, code-drawn astronaut, English and Korean guidance, and in-browser checks for keyboard and touch flows (Codex).
+- Visual consistency pass on the projected rover wheels, the outpost and field solar racks, and the expedition and information panels. The tutorial outline was aligned with its DOM targets and checked against the live game in both languages (Codex).
 - Phase 5 visual polish (CSS/SVG effects), strategy & balance analysis tests, README and GitHub Pages workflow.
 - Gameplay screenshots in docs/screenshots/ are captures of the actual game (not generated images).
 - Korean/English localisation system and the Korean translation of all UI and educational text (to be reviewed by Korean-speaking team members).

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../i18n/I18n';
-import type { Key, Params } from '../i18n/translate';
+import type { Key, Lang, Params } from '../i18n/translate';
 import { AstronautGuide, type GuideMood } from './AstronautGuide';
 
 type GuideAction = { label: Key; run: () => void };
@@ -17,74 +17,172 @@ export interface GuideMessage {
   action?: GuideAction;
 }
 
-interface Bounds { left: number; top: number; width: number; height: number }
+type Edges = { left: number; top: number; right: number; bottom: number };
+const clipping = /^(auto|scroll|hidden|clip)$/;
+const padding = 3;
 
-/** A pointer-transparent outline following the real element, including inside scroll panels. */
-function Spotlight({ scope, card, name, reveal }: {
+function visibleArea(host: DOMRect, ancestors: HTMLElement[]): Edges {
+  const view = window.visualViewport;
+  const clip: Edges = {
+    left: Math.max(host.left, view?.offsetLeft ?? 0),
+    top: Math.max(host.top, view?.offsetTop ?? 0),
+    right: Math.min(host.right, view ? view.offsetLeft + view.width : window.innerWidth),
+    bottom: Math.min(host.bottom, view ? view.offsetTop + view.height : window.innerHeight),
+  };
+  for (const parent of ancestors) {
+    const css = getComputedStyle(parent);
+    const clipX = clipping.test(css.overflowX), clipY = clipping.test(css.overflowY);
+    if ((!clipX && !clipY) || !parent.offsetWidth || !parent.offsetHeight) continue;
+    const rect = parent.getBoundingClientRect();
+    const scaleX = rect.width / parent.offsetWidth, scaleY = rect.height / parent.offsetHeight;
+    const x = rect.left + parent.clientLeft * scaleX, y = rect.top + parent.clientTop * scaleY;
+    if (clipX) {
+      clip.left = Math.max(clip.left, x);
+      clip.right = Math.min(clip.right, x + parent.clientWidth * scaleX);
+    }
+    if (clipY) {
+      clip.top = Math.max(clip.top, y);
+      clip.bottom = Math.min(clip.bottom, y + parent.clientHeight * scaleY);
+    }
+  }
+  return clip;
+}
+
+function clipBehind(clip: Edges, rect: DOMRect, element: Element | null) {
+  const cover = element?.getBoundingClientRect();
+  if (!cover || rect.right <= cover.left || rect.left >= cover.right || rect.top >= cover.bottom || rect.bottom <= cover.top) return;
+  if (cover.top - rect.top >= rect.bottom - cover.bottom) clip.bottom = Math.min(clip.bottom, cover.top);
+  else clip.top = Math.max(clip.top, cover.bottom);
+}
+
+function isMoving(element: Element) {
+  return element.getAnimations?.().some(animation =>
+    (animation.pending || animation.playState === 'running') &&
+    Number.isFinite(animation.effect?.getComputedTiming().endTime),
+  );
+}
+
+/** The portal and the measured target both use viewport coordinates. The outline never receives input. */
+function Spotlight({ scope, card, name, reveal, lang }: {
   scope: RefObject<HTMLElement>;
   card: RefObject<HTMLElement>;
   name: string;
   reveal: boolean;
+  lang: Lang;
 }) {
-  const [bounds, setBounds] = useState<Bounds | null>(null);
+  const layer = useRef<HTMLDivElement>(null);
+  const outline = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    const root = scope.current;
-    const target = root?.querySelector(`[data-tutorial-target="${name}"]`);
-    if (!root || !target) return;
-    const dock = root.querySelector('[data-tutorial-dock]');
-    const scrollParents: Element[] = [];
-    for (let el = target.parentElement; el && el !== document.body; el = el.parentElement) {
-      if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(el).overflowY)) scrollParents.push(el);
-    }
+    const root = scope.current, host = layer.current, ring = outline.current;
+    if (!root || !host || !ring) return;
     let frame = 0;
-    let initial = true;
-    const update = () => {
+    let needsReveal = reveal;
+    let target: Element | null = null;
+    let parent: Element | null = null;
+    let ancestors: HTMLElement[] = [];
+    let dock: Element | null = null;
+    const viewport = window.visualViewport;
+    const selector = `[data-tutorial-target="${name}"]`;
+
+    function schedule() {
+      if (!frame) frame = requestAnimationFrame(update);
+    }
+    const sizes = new ResizeObserver(schedule);
+
+    function update() {
+      frame = 0;
+      if (!root || !host || !ring) return;
+      const next = root.querySelector(selector);
+      const nextParent = next?.parentElement ?? null;
+      const nextDock = root.querySelector('[data-tutorial-dock]');
+      if (next !== target || nextParent !== parent || nextDock !== dock) {
+        target = next;
+        parent = nextParent;
+        dock = nextDock;
+        ancestors = [];
+        for (let node = parent; node && node !== document.body; node = node.parentElement) {
+          if (node instanceof HTMLElement) ancestors.push(node);
+        }
+        sizes.disconnect();
+        for (const element of new Set([root, target, card.current, dock, ...ancestors])) {
+          if (element) sizes.observe(element);
+        }
+      }
+      if (!target) { ring.hidden = true; return; }
+
+      // Resizing misses translation-only animations, including the entrance of the circuit panel.
+      if (isMoving(target) || ancestors.some(isMoving)) schedule();
       const rect = target.getBoundingClientRect();
-      const panel = card.current?.getBoundingClientRect();
-      const bottomBar = dock?.getBoundingClientRect();
-      let top = 2, bottom = window.innerHeight - 2;
-      let left = 2, right = window.innerWidth - 2;
-      for (const parent of scrollParents) {
-        const r = parent.getBoundingClientRect();
-        top = Math.max(top, r.top); bottom = Math.min(bottom, r.bottom);
-        left = Math.max(left, r.left); right = Math.min(right, r.right);
+      const origin = host.getBoundingClientRect();
+      if (!rect.width || !rect.height || !origin.width || !origin.height || getComputedStyle(target).visibility !== 'visible') {
+        ring.hidden = true;
+        return;
       }
-      if (bottomBar && !dock?.contains(target) && bottomBar.bottom >= window.innerHeight - 2 && rect.right > bottomBar.left && rect.left < bottomBar.right) {
-        bottom = Math.min(bottom, bottomBar.top);
-      }
-      if (panel && rect.right > panel.left && rect.left < panel.right && rect.top < panel.bottom && rect.bottom > panel.top) {
-        if (rect.top + rect.height / 2 >= panel.top) top = Math.max(top, panel.bottom + 5);
-        else bottom = Math.min(bottom, panel.top - 5);
-      }
-      if (initial && reveal) {
-        initial = false;
-        if (rect.top < top + 2 || rect.bottom > bottom - 2) {
+
+      const clip = visibleArea(origin, ancestors);
+      if (!dock?.contains(target)) clipBehind(clip, rect, dock);
+      if (!card.current?.contains(target)) clipBehind(clip, rect, card.current);
+      if (needsReveal) {
+        needsReveal = false;
+        if (rect.top < clip.top || rect.bottom > clip.bottom || rect.left < clip.left || rect.right > clip.right) {
           target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
-          frame = requestAnimationFrame(update);
+          schedule();
           return;
         }
       }
-      const x = Math.max(left, rect.left - 3), y = Math.max(top, rect.top - 3);
-      const width = Math.min(right, rect.right + 3) - x, height = Math.min(bottom, rect.bottom + 3) - y;
-      const next = width > 10 && height > 10 ? { left: x, top: y, width, height } : null;
-      setBounds((old) => old?.left === next?.left && old?.top === next?.top && old?.width === next?.width && old?.height === next?.height ? old : next);
-    };
-    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); };
-    schedule();
-    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : undefined;
-    for (const el of [root, target, card.current, dock, ...scrollParents]) if (el) observer?.observe(el);
-    window.addEventListener('resize', schedule);
+      if (rect.right <= clip.left || rect.left >= clip.right || rect.bottom <= clip.top || rect.top >= clip.bottom) {
+        ring.hidden = true;
+        return;
+      }
+
+      // A clipped control keeps the same outline and only its hidden portion is masked.
+      const sx = host.clientWidth / origin.width, sy = host.clientHeight / origin.height;
+      const left = rect.left - padding / sx, top = rect.top - padding / sy;
+      const right = rect.right + padding / sx, bottom = rect.bottom + padding / sy;
+      const insets = [
+        Math.max(0, (clip.top - top) * sy), Math.max(0, (right - clip.right) * sx),
+        Math.max(0, (bottom - clip.bottom) * sy), Math.max(0, (clip.left - left) * sx),
+      ];
+      const inset = insets.some(n => n > 0) ? `inset(${insets.map(n => `${n}px`).join(' ')})` : 'none';
+      const style = `left:${(left - origin.left) * sx}px;top:${(top - origin.top) * sy}px;` +
+        `width:${(right - left) * sx}px;height:${(bottom - top) * sy}px;clip-path:${inset}`;
+      if (ring.getAttribute('style') !== style) ring.setAttribute('style', style);
+      ring.hidden = false;
+    }
+
+    const changes = new MutationObserver(schedule);
+    changes.observe(root, {
+      childList: true, subtree: true, characterData: true, attributes: true,
+      attributeFilter: ['class', 'style', 'hidden', 'open', 'aria-expanded', 'data-tutorial-target'],
+    });
+    const motion = ['animationstart', 'animationend', 'transitionrun', 'transitionend'];
+    for (const event of motion) window.addEventListener(event, schedule, true);
     window.addEventListener('scroll', schedule, true);
-    window.visualViewport?.addEventListener('resize', schedule);
+    window.addEventListener('resize', schedule);
+    viewport?.addEventListener('scroll', schedule);
+    viewport?.addEventListener('resize', schedule);
+    document.fonts?.addEventListener('loadingdone', schedule);
+    schedule();
     return () => {
-      observer?.disconnect();
       cancelAnimationFrame(frame);
-      window.removeEventListener('resize', schedule);
+      sizes.disconnect();
+      changes.disconnect();
+      for (const event of motion) window.removeEventListener(event, schedule, true);
       window.removeEventListener('scroll', schedule, true);
-      window.visualViewport?.removeEventListener('resize', schedule);
+      window.removeEventListener('resize', schedule);
+      viewport?.removeEventListener('scroll', schedule);
+      viewport?.removeEventListener('resize', schedule);
+      document.fonts?.removeEventListener('loadingdone', schedule);
     };
-  }, [scope, card, name, reveal]);
-  return bounds && createPortal(<div className="tutorial-spot" style={bounds} aria-hidden><i /></div>, document.body);
+  }, [scope, card, name, reveal, lang]);
+
+  return createPortal(
+    <div ref={layer} className="tutorial-spot-layer" aria-hidden>
+      <div ref={outline} className="tutorial-spot" hidden><i /></div>
+    </div>,
+    document.body,
+  );
 }
 
 export function TutorialGuide({ message, scope, onPause, onSkip, reveal = false }: {
@@ -94,7 +192,7 @@ export function TutorialGuide({ message, scope, onPause, onSkip, reveal = false 
   onSkip?: () => void;
   reveal?: boolean;
 }) {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
   const ref = useRef<HTMLElement>(null);
   const mood = message.mood ?? 'ready';
   return (
@@ -115,7 +213,7 @@ export function TutorialGuide({ message, scope, onPause, onSkip, reveal = false 
           {onSkip && <button type="button" className="tutorial-link" onClick={onSkip}>{t('tut.skip')}</button>}
         </div>
       )}
-      {message.target && <Spotlight key={message.target} scope={scope} card={ref} name={message.target} reveal={reveal} />}
+      {message.target && <Spotlight key={message.target} scope={scope} card={ref} name={message.target} reveal={reveal} lang={lang} />}
     </section>
   );
 }

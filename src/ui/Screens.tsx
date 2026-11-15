@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { MISSION } from '../game/config';
 import { computeScore, totalSolarWithSiteFraction } from '../game/engine';
 import { missionSummary, missionTitle, takeaways } from '../game/debrief';
@@ -7,46 +7,18 @@ import type { GameState, MissionConfig, Resources } from '../game/types';
 import { LangToggle, useI18n } from '../i18n/I18n';
 import type { Key } from '../i18n/translate';
 import type { OutpostState } from '../art/outpost';
+import { paintLunarBackdrop } from '../art/lunarBackdrop';
 import { BaseScene } from './BaseScene';
 import { AstronautGuide } from './AstronautGuide';
 import { DifficultyBadge } from './MissionScreen';
 
-/* ---------------- Animated background ---------------- */
-const BG_STARS = Array.from({ length: 140 }, (_, i) => {
-  const a = Math.sin(i * 12.9898) * 43758.5453;
-  const b = Math.sin(i * 78.233) * 12345.6789;
-  return { i, x: (a - Math.floor(a)) * 100, y: (b - Math.floor(b)) * 100, r: ((a * b) % 1 + 1) % 1 * 1.4 + 0.3, d: (i % 9) * 0.5 };
-});
-
-export function Starfield() {
-  return (
-    <div className="starfield" aria-hidden>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <radialGradient id="mg" cx="0.35" cy="0.35">
-            <stop offset="0" stopColor="#d9dde4" />
-            <stop offset="0.7" stopColor="#8f96a3" />
-            <stop offset="1" stopColor="#4b505b" />
-          </radialGradient>
-          <radialGradient id="halo">
-            <stop offset="0.6" stopColor="#56C7F2" stopOpacity="0.15" />
-            <stop offset="1" stopColor="#56C7F2" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        {BG_STARS.map((s) => (
-          <circle key={s.i} cx={s.x} cy={s.y} r={s.r * 0.12} fill="#cfe3ff" className="twinkle" style={{ animationDelay: `${s.d}s` }} />
-        ))}
-        <g className="moon-drift">
-          <circle cx="50" cy="128" r="62" fill="url(#halo)" />
-          <circle cx="50" cy="128" r="52" fill="url(#mg)" />
-          <circle cx="34" cy="94" r="5" fill="#7a808c" opacity="0.6" />
-          <circle cx="60" cy="88" r="3" fill="#7a808c" opacity="0.6" />
-          <circle cx="72" cy="100" r="6" fill="#7a808c" opacity="0.5" />
-          <circle cx="47" cy="104" r="2.2" fill="#7a808c" opacity="0.6" />
-        </g>
-      </svg>
-    </div>
-  );
+export function LunarBackdrop() {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const g = canvas.current?.getContext('2d', { alpha: false });
+    if (g) paintLunarBackdrop(g);
+  }, []);
+  return <canvas ref={canvas} className="lunar-backdrop" width={416} height={234} aria-hidden />;
 }
 
 /* ---------------- Main menu ---------------- */
@@ -218,7 +190,7 @@ export function HowToPlay({ cfg, onBack, onStart, onPractice }: { cfg: MissionCo
   const minHealth = MISSION.failure.minHealth;
   const research = MISSION.capacity.research;
   return (
-    <div className="screen info-page">
+    <div className="screen info-page info-terminal">
       <header>
         <h1>{t('how.title')}</h1>
         <div className="header-actions">
@@ -367,7 +339,7 @@ export function Credits({ onBack }: { onBack: () => void }) {
     go(SCI_TABS[(i + d + SCI_TABS.length) % SCI_TABS.length]);
   };
   return (
-    <div className="screen info-page sci-page">
+    <div className="screen info-page info-terminal sci-page">
       <header>
         <h1>{t('cr.title')}</h1>
         <div className="header-actions">

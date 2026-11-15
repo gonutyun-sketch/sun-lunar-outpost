@@ -8,7 +8,7 @@ import { useI18n } from './i18n/I18n';
 import { learn, startTutorial, TUTORIAL_PREF_KEY, type TutorialEvent, type TutorialProgress } from './tutorial/progress';
 import { ExploreScreen } from './ui/ExploreScreen';
 import { MissionScreen } from './ui/MissionScreen';
-import { ConfirmNewGame, Credits, DifficultySelect, HowToPlay, MainMenu, Results, Starfield, TutorialStart, type SaveSlot } from './ui/Screens';
+import { ConfirmNewGame, Credits, DifficultySelect, HowToPlay, LunarBackdrop, MainMenu, Results, TutorialStart, type SaveSlot } from './ui/Screens';
 
 type Screen = 'menu' | 'difficulty' | 'guide-choice' | 'practice' | 'how' | 'credits' | 'mission' | 'explore' | 'results';
 type Notice = 'invalid' | 'resumed' | 'migrated' | null;
@@ -136,7 +136,7 @@ export default function App() {
 
   return (
     <div className={fx ? '' : 'no-fx'}>
-      {(screen === 'how' || screen === 'credits' || screen === 'results') && <Starfield />}
+      {(screen === 'how' || screen === 'credits' || screen === 'results') && <LunarBackdrop />}
       <Guard onError={recover} resetKey={screen}>
         {screen === 'menu' && (
           <MainMenu

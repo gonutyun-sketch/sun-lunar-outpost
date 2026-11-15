@@ -1,6 +1,6 @@
 /** Top-down navigation and interaction use world coordinates. Only the scene is pixel-rasterized. */
 import { dot, face, ink, line, type Point } from '../art/pixels';
-import { roverShadow, roverSprite } from '../art/roverSprite';
+import { roverPoint, roverShadow, roverSprite } from '../art/roverSprite';
 import { roverStructures, roverTerrain, WORLD_PIXEL } from '../art/roverTerrain';
 import { batteryLevel, FX_LIMITS, type Vis } from './fx';
 import { dist, type Rover } from './sim';
@@ -65,30 +65,37 @@ function drawTracks(g: CanvasRenderingContext2D, v: Vis, t: number, left: number
 function drawVehicle(g: CanvasRenderingContext2D, r: Rover, f: FrameInfo) {
   const level = batteryLevel(r.battery);
   const x = cell(r.x), y = cell(r.y);
-  const c = Math.cos(r.angle), s = Math.sin(r.angle);
+  const lean = f.motion && Math.abs(f.vis.accel) > 185 ? Math.sign(-f.vis.accel) : 0;
+  const [c, s] = roverPoint(r.angle, 1, 0);
   if (f.inShadow) {
     // Two native-pixel terraces keep the heading legible in the deep-shadow zone.
     const beam = (u: number, v: number): Point => [x / 2 + u * c - v * s, y / 2 + u * s + v * c];
     g.save();
     g.scale(WORLD_PIXEL, WORLD_PIXEL);
-    face(g, [beam(8, -4), beam(73, -32), beam(84, -12), beam(84, 12), beam(73, 32), beam(8, 4)], '#d7d3b224');
-    face(g, [beam(8, -3), beam(44, -19), beam(63, -7), beam(63, 7), beam(44, 19), beam(8, 3)], '#e9dfb13c');
+    face(g, [beam(11, -4), beam(73, -32), beam(84, -12), beam(84, 12), beam(73, 32), beam(11, 4)], '#d7d3b224');
+    face(g, [beam(11, -3), beam(44, -19), beam(63, -7), beam(63, 7), beam(44, 19), beam(11, 3)], '#e9dfb13c');
     g.restore();
   }
   g.save();
   g.scale(WORLD_PIXEL, WORLD_PIXEL);
-  roverShadow(g, x / 2, y / 2);
+  roverShadow(g, x / 2, y / 2, r.angle);
   roverSprite(g, x / 2, y / 2, {
     angle: r.angle,
     tread: f.motion ? Math.floor(f.vis.odo / 6) : 0,
-    lean: f.motion && Math.abs(f.vis.accel) > 185 ? Math.sign(-f.vis.accel) : 0,
+    lean,
     cargo: f.cargo,
   });
   g.restore();
   const status = level === 0 ? ink.mint : level === 1 ? ink.amber : ink.red;
   const blink = f.motion && level > 0 && Math.floor(f.t * (level === 2 ? 5 : 3)) % 2 === 0;
-  dot(g, cell(x - c * 7 - s * 7), cell(y - s * 7 + c * 7 - 14), blink ? '#80515b' : status, 4, 3);
-  if (f.motion && f.vis.accel < -90 && f.vis.speed > 12) dot(g, cell(x - c * 21), cell(y - s * 21 - 8), '#fb8175', 5, 3);
+  const [lampX, lampY] = roverPoint(r.angle, -6, -4.5, 9.6 - lean / 4);
+  dot(g, cell(x + lampX * 2), cell(y + lampY * 2), blink ? '#80515b' : status, 4, 2);
+  if (s < -0.05 && f.motion && f.vis.accel < -90 && f.vis.speed > 12) {
+    for (const side of [-3.8, 3.8]) {
+      const [brakeX, brakeY] = roverPoint(r.angle, -11.8, side, 6.9 - lean / 2);
+      dot(g, cell(x + brakeX * 2), cell(y + brakeY * 2), '#fb8175', 3, 2);
+    }
+  }
 
   if (f.drill > 0) {
     const dx = cell(x + c * 19), dy = cell(y + s * 19);

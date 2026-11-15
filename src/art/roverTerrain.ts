@@ -1,5 +1,6 @@
 import { shadowLevel, type Rect, type WorldMap } from '../rover/world';
 import { boulder, crater, dot, face, ink, line, oval, random, surface, type Point } from './pixels';
+import { solarModule, solarModuleShadow, type SolarModule } from './solarModule';
 
 export const WORLD_PIXEL = 2;
 const terrainCache = new WeakMap<WorldMap, HTMLCanvasElement>();
@@ -126,42 +127,41 @@ function depot(g: CanvasRenderingContext2D, r: Rect) {
 
 function solar(g: CanvasRenderingContext2D, r: Rect, broken: boolean) {
   const x = p(r.x), y = p(r.y), w = p(r.w), h = p(r.h);
-  const n = Math.floor(w / 15);
-  for (let i = 0; i < n; i++) {
-    const px = x + i * 15;
-    const bad = broken && i >= n - 3;
-    face(g, [[px + 6, y + 1], [px + 15, y + 11], [px - 3, y + 19], [px - 14, y + 12]], '#20263986');
-    line(g, [px + 1, y - 3], [px + 1, y + h - 1], '#68778b', 2);
-    line(g, [px + 11, y + 2], [px + 11, y + h], '#a3a4a0', 2);
-    const tl: Point = [px, y - 6], tr: Point = [px + 11, y - 2], br: Point = [px + 15, y + h - 3], bl: Point = [px + 3, y + h - 7];
-    face(g, [bl, br, [br[0], br[1] + 3], [bl[0], bl[1] + 3]], '#34415b');
-    face(g, [tl, tr, br, bl], bad ? '#674754' : '#365e8c');
-    line(g, tl, tr, '#929faf');
-    line(g, tr, br, '#e3cfaa');
-    line(g, [px + 1, y - 1], [px + 12, y + 3], bad ? '#9c6069' : '#7eacc2');
-    for (let k = 1; k <= 2; k++) line(g, [px + k * 4, y - 5 + k], [px + 3 + k * 4, y + h - 8 + k], bad ? '#423044' : '#223e64');
-    if (bad) {
-      line(g, [px + 4, y - 5], [px + 9, y + 2], '#1d2436', 2);
-      line(g, [px + 9, y + 2], [px + 6, y + 7], '#1d2436');
-      dot(g, px + 13, y + h - 1, ink.red, 2);
-    }
-  }
+  const count = Math.max(1, Math.floor(w / 20));
+  const stride = w / count;
+  const racks = Array.from({ length: count }, (_, i): SolarModule => ({
+    origin: [x + i * stride + 3, y + h - 1],
+    along: [stride - 4, 0],
+    rear: [-3, 2 - h],
+    lower: 3.6,
+    upper: 7.5,
+    cells: [3, 2],
+  }));
+  for (const rack of racks) solarModuleShadow(g, rack);
+  line(g, [x + 3, y + h - 1], [x + w - 4, y + h - 1], '#444b60');
+  racks.forEach((rack, i) => solarModule(g, rack, { broken: broken && i >= count - 2 }));
 }
 
 function plant(g: CanvasRenderingContext2D, m: WorldMap, healthy: boolean) {
   const r = m.blocks[5], x = p(r.x), y = p(r.y), w = p(r.w), h = p(r.h);
   const cx = x + w / 2, cy = y + h / 2;
   const color = healthy ? '#6dcbd1' : '#807686';
-  for (const v of [m.sites.valveA, m.sites.valveB, m.sites.valveC]) {
+  const valves = [m.sites.valveA, m.sites.valveB, m.sites.valveC];
+  for (const v of valves) {
     const vx = p(v.x), vy = p(v.y);
     line(g, [cx + 2, cy + 3], [vx + 2, vy + 3], '#303445', 5);
     line(g, [cx, cy], [vx, vy], '#646e82', 5);
     line(g, [cx, cy - 1], [vx, vy - 1], '#acb7bf', 2);
     line(g, [cx, cy], [vx, vy], color);
-    block(g, vx - 7, vy - 8, 14, 14, 4, ['#9ca1a4', '#677488', '#4c5670']);
-    oval(g, vx, vy - 5, 4, 3, '#533c43');
-    dot(g, vx - 3, vy - 5, ink.amber, 7);
-    dot(g, vx, vy - 8, ink.amber, 1, 7);
+  }
+  for (const v of valves) {
+    const vx = p(v.x), vy = p(v.y);
+    block(g, vx - 7, vy - 6, 14, 13, 3, ['#9ca1a4', '#677488', '#4c5670']);
+    dot(g, vx - 3, vy - 5, '#627386', 6, 9);
+    oval(g, vx, vy - 5, 5, 4, '#b09a7b');
+    oval(g, vx, vy - 5, 4, 3, '#4f414a');
+    line(g, [vx - 3, vy - 5], [vx + 3, vy - 5], ink.amber);
+    dot(g, vx, vy - 7, ink.amber, 1, 5);
   }
   block(g, x, y, w, h, 7, ['#8692a2', '#657389', '#444f67']);
   for (let i = 0; i < 3; i++) {
@@ -181,7 +181,8 @@ function pads(g: CanvasRenderingContext2D, m: WorldMap) {
   for (const [s, color] of [[m.sites.dock, '#799bba'], [m.charger, '#cba969']] as const) {
     const x = p(s.x), y = p(s.y), r = p(s.r) * 0.92;
     const shape: Point[] = [[x - r * 0.62, y - r], [x + r * 0.62, y - r], [x + r, y - r * 0.6], [x + r, y + r * 0.6], [x + r * 0.62, y + r], [x - r * 0.62, y + r], [x - r, y + r * 0.6], [x - r, y - r * 0.6]];
-    face(g, shape.map(([u, v]) => [u + 3, v + 3]), '#363d53');
+    face(g, shape.map(([u, v]) => [u - 5, v + 3]), '#363d53');
+    face(g, shape.map(([u, v]) => [u, v + 2]), '#3d4960');
     face(g, shape, '#60677b');
     for (let i = 0; i < 8; i++) {
       line(g, shape[i], shape[(i + 1) % 8], color);
@@ -223,7 +224,7 @@ export function roverStructures(m: WorldMap) {
   solar(g, m.blocks[2], false);
   solar(g, m.blocks[3], false);
   const sb = m.blocks[4];
-  const solarVariants = { canvas: surface(Math.ceil(p(sb.w)) + 25, 68), x: p(sb.x) - 15, y: p(sb.y) - 9, height: 34 };
+  const solarVariants = { canvas: surface(Math.ceil(p(sb.w)) + 33, 68), x: p(sb.x) - 23, y: p(sb.y) - 9, height: 34 };
   const valves = [m.sites.valveA, m.sites.valveB, m.sites.valveC];
   const plantBlock = m.blocks[5];
   const px = Math.min(p(plantBlock.x) - 26, ...valves.map(v => p(v.x) - 21));
