@@ -372,5 +372,7 @@ export const enLearn = {
   'sound.on': 'ON',
   'sound.off': 'OFF',
   'sound.volume': 'Effects volume',
+  'sound.music': 'Space music',
+  'sound.musicVolume': 'Music volume',
   'sound.note': 'Game sounds are feedback from the rover and base machines. On the real Moon there is no air, so sound cannot travel across the surface.',
 } as const;

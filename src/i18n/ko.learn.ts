@@ -369,5 +369,7 @@ export const koLearn: Record<keyof typeof enLearn, string> = {
   'sound.on': '켜짐',
   'sound.off': '꺼짐',
   'sound.volume': '효과음 음량',
+  'sound.music': '우주 배경 음악',
+  'sound.musicVolume': '음악 음량',
   'sound.note': '게임 속 소리는 로버와 기지 장비가 알려 주는 신호예요. 실제 달에는 공기가 없어서 소리가 표면을 따라 퍼지지 않아요.',
 };

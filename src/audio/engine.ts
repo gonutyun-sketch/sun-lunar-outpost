@@ -7,11 +7,13 @@
  * - a missing or blocked AudioContext never breaks the game: every call becomes a no-op.
  * Sound in the game is a fictional feedback layer (rover sensors, machinery), not a recording of the Moon.
  */
+import { startMusic, type MusicHandle } from './music';
 import { LOOPS, SFX, type LoopName, type SfxName } from './sfx';
 
-export interface AudioSettings { on: boolean; volume: number }
+/** `on` = all sound; `volume` = effects; `music` / `musicVolume` = background music. */
+export interface AudioSettings { on: boolean; volume: number; music: boolean; musicVolume: number }
 export const AUDIO_KEY = 'sun-audio';
-export const DEFAULT_AUDIO: AudioSettings = { on: true, volume: 60 };
+export const DEFAULT_AUDIO: AudioSettings = { on: true, volume: 60, music: true, musicVolume: 40 };
 /** Most one-shot effects allowed to overlap; extra ones are dropped (quiet beats noisy). */
 export const MAX_VOICES = 6;
 
@@ -22,8 +24,13 @@ export function readAudioSettings(kv: KV | null): AudioSettings {
     const raw = kv?.getItem(AUDIO_KEY);
     if (!raw) return { ...DEFAULT_AUDIO };
     const v = JSON.parse(raw) as Partial<AudioSettings>;
-    const volume = typeof v.volume === 'number' && Number.isFinite(v.volume) ? Math.round(Math.min(100, Math.max(0, v.volume))) : DEFAULT_AUDIO.volume;
-    return { on: typeof v.on === 'boolean' ? v.on : DEFAULT_AUDIO.on, volume };
+    const pct = (x: unknown, d: number) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(Math.min(100, Math.max(0, x))) : d);
+    return {
+      on: typeof v.on === 'boolean' ? v.on : DEFAULT_AUDIO.on,
+      volume: pct(v.volume, DEFAULT_AUDIO.volume),
+      music: typeof v.music === 'boolean' ? v.music : DEFAULT_AUDIO.music,
+      musicVolume: pct(v.musicVolume, DEFAULT_AUDIO.musicVolume),
+    };
   } catch {
     return { ...DEFAULT_AUDIO };
   }
@@ -35,6 +42,9 @@ export function readAudioSettings(kv: KV | null): AudioSettings {
  */
 export const MAX_MASTER = 4.2;
 export const masterGain = (s: AudioSettings) => (s.on ? Math.pow(s.volume / 100, 1.5) * MAX_MASTER : 0);
+/** Background music sits well under the effects (default 40 % ≈ −25 dBFS). */
+export const MAX_MUSIC = 1.6;
+export const musicGain = (s: AudioSettings) => (s.on && s.music ? Math.pow(s.musicVolume / 100, 1.5) * MAX_MUSIC : 0);
 
 interface LoopVoice { nodes: AudioNode[]; sources: AudioScheduledSourceNode[]; out: GainNode; pitch: AudioParam[]; base: number[]; level: number }
 
@@ -42,6 +52,8 @@ export class AudioEngine {
   settings: AudioSettings;
   ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private musicOut: GainNode | null = null;
+  private music: MusicHandle | null = null;
   private noise: AudioBuffer | null = null;
   private last = new Map<SfxName, number>();
   private voices: number[] = [];
@@ -73,15 +85,31 @@ export class AudioEngine {
         } catch { /* compressor optional */ }
         tail.connect(ctx.destination);
         this.master = master;
-        ctx.onstatechange = () => { if (ctx.state === 'running') this.reapply(); };
+        // music has its own bus straight to the speakers (the effects compressor never pumps it)
+        const musicOut = ctx.createGain();
+        musicOut.gain.value = musicGain(this.settings);
+        musicOut.connect(ctx.destination);
+        this.musicOut = musicOut;
+        ctx.onstatechange = () => { if (ctx.state === 'running') { this.reapply(); this.syncMusic(); } };
       }
       if (this.ctx.state === 'suspended' && !document.hidden) void this.ctx.resume().catch(() => {});
+      this.syncMusic();
     } catch {
       this.ctx = null; // audio unavailable: the game continues silently
     }
   }
 
   get ready() { return !!this.ctx && !!this.master && this.ctx.state === 'running'; }
+  get musicPlaying() { return !!this.music; }
+
+  /** Start or stop the background music to match the settings (one instance at most). */
+  private syncMusic() {
+    const want = this.ready && !!this.musicOut && this.settings.on && this.settings.music && this.settings.musicVolume > 0;
+    try {
+      if (want && !this.music) this.music = startMusic(this.ctx!, this.musicOut!);
+      if (!want && this.music) { this.music.stop(); this.music = null; }
+    } catch { this.music = null; }
+  }
 
   private noiseBuffer(ctx: AudioContext) {
     if (!this.noise) {
@@ -173,11 +201,17 @@ export class AudioEngine {
   setSettings(next: Partial<AudioSettings>) {
     this.settings = { ...this.settings, ...next };
     this.settings.volume = Math.round(Math.min(100, Math.max(0, this.settings.volume)));
+    this.settings.musicVolume = Math.round(Math.min(100, Math.max(0, this.settings.musicVolume)));
     try { this.kv?.setItem(AUDIO_KEY, JSON.stringify(this.settings)); } catch { /* storage full or blocked */ }
     if (this.master && this.ctx) {
       this.master.gain.cancelScheduledValues(this.ctx.currentTime);
       this.master.gain.setTargetAtTime(masterGain(this.settings), this.ctx.currentTime, 0.03);
     }
+    if (this.musicOut && this.ctx) {
+      this.musicOut.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.musicOut.gain.setTargetAtTime(musicGain(this.settings), this.ctx.currentTime, 0.08);
+    }
+    this.syncMusic();
     if (!this.settings.on || this.settings.volume === 0) this.muteLoops(); else this.reapply();
     this.listeners.forEach((f) => f());
   }

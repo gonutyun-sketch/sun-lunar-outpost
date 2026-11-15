@@ -53,6 +53,19 @@ export function SoundControl({ className = '' }: { className?: string }) {
               onPointerUp={() => audio.play('select')} onKeyUp={() => audio.play('select')} />
             <b>{s.volume}%</b>
           </label>
+          <div className="sound-row">
+            <span>{t('sound.music')}</span>
+            <button type="button" role="switch" aria-checked={s.music} data-sfx="custom" disabled={!s.on} className={`sound-switch ${s.music && s.on ? 'on' : ''}`}
+              onClick={() => { audio.unlock(); audio.setSettings({ music: !s.music }); audio.play('select'); }}>
+              {t(s.music ? 'sound.on' : 'sound.off')}
+            </button>
+          </div>
+          <label className="sound-row sound-volume">
+            <span>{t('sound.musicVolume')}</span>
+            <input type="range" min={0} max={100} step={5} value={s.musicVolume} disabled={!s.on || !s.music} aria-valuetext={`${s.musicVolume}%`}
+              onChange={(e) => audio.setSettings({ musicVolume: Number(e.target.value) })} />
+            <b>{s.musicVolume}%</b>
+          </label>
           <p className="sound-note">{t('sound.note')}</p>
         </div>
       )}

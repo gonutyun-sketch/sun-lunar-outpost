@@ -1451,3 +1451,4 @@ html.touch .tutorial-link, html.touch .tutorial-actions .tutorial-action { min-h
 html.touch .sound-btn, html.touch .sound-switch { min-height: 44px; min-width: 44px; }
 @media (pointer: coarse) { .sound-btn, .sound-switch { min-height: 44px; min-width: 44px; } }
 @media (max-width: 520px) { .menu-corner .sound-label { display: none; } }
+.sound-switch:disabled { opacity: 0.45; }
