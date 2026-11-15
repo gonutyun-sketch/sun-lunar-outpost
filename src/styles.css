@@ -1436,6 +1436,11 @@ html.touch .tutorial-link, html.touch .tutorial-actions .tutorial-action { min-h
   display: grid; gap: 10px; padding: 12px; color: #e6eef8; background: #131c2a; border: 2px solid #77cde0;
   border-radius: var(--radius); box-shadow: 4px 4px 0 #080c16; text-align: left;
 }
+.menu-corner .sound-panel {
+  max-height: calc(100dvh - max(14px, env(safe-area-inset-top)) - 54px - max(12px, env(safe-area-inset-bottom)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .sound-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 600; }
 .sound-switch { min-width: 74px; min-height: 36px; padding: 4px 12px; font: 700 12px var(--body); letter-spacing: 0.06em; color: #a1aec2; background: #263249; border: 1px solid #45536a; border-radius: 2px; box-shadow: inset 0 -3px 0 #1a2336; }
 .sound-switch.on { color: #10201c; background: #87d7bd; border-color: #b6eedb; box-shadow: inset 0 -3px 0 #5aa58b; }
@@ -1451,4 +1456,16 @@ html.touch .tutorial-link, html.touch .tutorial-actions .tutorial-action { min-h
 html.touch .sound-btn, html.touch .sound-switch { min-height: 44px; min-width: 44px; }
 @media (pointer: coarse) { .sound-btn, .sound-switch { min-height: 44px; min-width: 44px; } }
 @media (max-width: 520px) { .menu-corner .sound-label { display: none; } }
+@media (max-width: 640px), (max-height: 440px) {
+  .topbar-actions .sound-panel {
+    position: fixed;
+    inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    width: auto;
+    max-width: 270px;
+    max-height: calc(100dvh - 90px);
+    margin-inline: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
 .sound-switch:disabled { opacity: 0.45; }

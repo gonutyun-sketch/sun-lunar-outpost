@@ -16,6 +16,7 @@ export const AUDIO_KEY = 'sun-audio';
 export const DEFAULT_AUDIO: AudioSettings = { on: true, volume: 60, music: true, musicVolume: 40 };
 /** Most one-shot effects allowed to overlap; extra ones are dropped (quiet beats noisy). */
 export const MAX_VOICES = 6;
+const PRIORITY_VOICES = 2;
 
 interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }
 
@@ -46,7 +47,41 @@ export const masterGain = (s: AudioSettings) => (s.on ? Math.pow(s.volume / 100,
 export const MAX_MUSIC = 1.6;
 export const musicGain = (s: AudioSettings) => (s.on && s.music ? Math.pow(s.musicVolume / 100, 1.5) * MAX_MUSIC : 0);
 
-interface LoopVoice { nodes: AudioNode[]; sources: AudioScheduledSourceNode[]; out: GainNode; pitch: AudioParam[]; base: number[]; level: number }
+interface LoopVoice {
+  nodes: AudioNode[];
+  sources: AudioScheduledSourceNode[];
+  out: GainNode;
+  pitch: AudioParam[];
+  base: number[];
+  level: number;
+  pitchFactor: number;
+  pitchAt: number;
+  idleTimer?: ReturnType<typeof setTimeout>;
+}
+
+/** Keep normal levels linear and leave headroom for the sum of both buses. */
+function outputBus(ctx: AudioContext): GainNode {
+  const mix = ctx.createGain();
+  try {
+    const limiter = ctx.createWaveShaper();
+    const curve = new Float32Array(2049);
+    const knee = 0.72, range = 0.24;
+    for (let i = 0; i < curve.length; i++) {
+      const sample = (2 * i / (curve.length - 1) - 1) * 4;
+      const magnitude = Math.abs(sample);
+      curve[i] = magnitude <= knee ? sample
+        : Math.sign(sample) * (knee + range * (1 - Math.exp(-(magnitude - knee) / range)));
+    }
+    limiter.curve = curve;
+    limiter.connect(ctx.destination);
+    mix.connect(limiter);
+    mix.gain.value = 0.25;
+  } catch {
+    mix.gain.value = 0.5;
+    mix.connect(ctx.destination);
+  }
+  return mix;
+}
 
 export class AudioEngine {
   settings: AudioSettings;
@@ -54,6 +89,7 @@ export class AudioEngine {
   private master: GainNode | null = null;
   private musicOut: GainNode | null = null;
   private music: MusicHandle | null = null;
+  private hidden = false;
   private noise: AudioBuffer | null = null;
   private last = new Map<SfxName, number>();
   private voices: number[] = [];
@@ -70,11 +106,13 @@ export class AudioEngine {
 
   /** Call from a real user gesture. Creates or resumes the AudioContext. Safe to call often. */
   unlock() {
+    if (this.hidden || (typeof document !== 'undefined' && document.hidden)) return;
     try {
       if (!this.ctx) {
         const ctx = this.factory();
         if (!ctx) return;
         this.ctx = ctx;
+        const mix = outputBus(ctx);
         const master = ctx.createGain();
         master.gain.value = masterGain(this.settings);
         let tail: AudioNode = master;
@@ -83,30 +121,35 @@ export class AudioEngine {
           comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
           master.connect(comp); tail = comp;
         } catch { /* compressor optional */ }
-        tail.connect(ctx.destination);
+        tail.connect(mix);
         this.master = master;
-        // music has its own bus straight to the speakers (the effects compressor never pumps it)
+        // Keep music outside the effects compressor, then protect their combined output.
         const musicOut = ctx.createGain();
         musicOut.gain.value = musicGain(this.settings);
-        musicOut.connect(ctx.destination);
+        musicOut.connect(mix);
         this.musicOut = musicOut;
-        ctx.onstatechange = () => { if (ctx.state === 'running') { this.reapply(); this.syncMusic(); } };
+        ctx.onstatechange = () => {
+          if (ctx !== this.ctx || ctx.state !== 'running') return;
+          if (this.hidden) { this.setHidden(true); return; }
+          this.reapply();
+          this.syncMusic();
+        };
       }
-      if (this.ctx.state === 'suspended' && !document.hidden) void this.ctx.resume().catch(() => {});
+      this.resume(this.ctx);
       this.syncMusic();
     } catch {
       this.ctx = null; // audio unavailable: the game continues silently
     }
   }
 
-  get ready() { return !!this.ctx && !!this.master && this.ctx.state === 'running'; }
+  get ready() { return !this.hidden && !!this.ctx && !!this.master && this.ctx.state === 'running'; }
   get musicPlaying() { return !!this.music; }
 
   /** Start or stop the background music to match the settings (one instance at most). */
   private syncMusic() {
-    const want = this.ready && !!this.musicOut && this.settings.on && this.settings.music && this.settings.musicVolume > 0;
+    const want = this.settings.on && this.settings.music && this.settings.musicVolume > 0;
     try {
-      if (want && !this.music) this.music = startMusic(this.ctx!, this.musicOut!);
+      if (want && this.ready && this.musicOut && !this.music) this.music = startMusic(this.ctx!, this.musicOut);
       if (!want && this.music) { this.music.stop(); this.music = null; }
     } catch { this.music = null; }
   }
@@ -133,7 +176,8 @@ export class AudioEngine {
       const ctx = this.ctx!;
       const t = ctx.currentTime;
       this.voices = this.voices.filter((end) => end > t);
-      if (this.voices.length >= MAX_VOICES && !spec.priority) ok = false;
+      const limit = MAX_VOICES + (spec.priority ? PRIORITY_VOICES : 0);
+      if (this.voices.length >= limit) ok = false;
       else {
         try {
           const end = spec.build({ ctx, out: this.master!, t: t + 0.005, noise: () => this.noiseBuffer(ctx) });
@@ -152,23 +196,41 @@ export class AudioEngine {
     const ctx = this.ctx;
     let v = this.loops.get(name);
     const target = Math.max(0, Math.min(1, level));
-    this.wanted.set(name, { level: target, pitch });
+    if (target > 0) this.wanted.set(name, { level: target, pitch });
+    else this.wanted.delete(name);
     if (!v) {
       if (target <= 0 || !this.settings.on || this.settings.volume <= 0 || !this.ready || !ctx || !this.master) return;
       try {
         const built = LOOPS[name].build({ ctx, out: this.master, t: ctx.currentTime, noise: () => this.noiseBuffer(ctx) });
-        v = { ...built, level: 0 };
+        v = { ...built, level: 0, pitchFactor: 1, pitchAt: -Infinity };
         this.loops.set(name, v);
       } catch { return; }
     }
     if (!ctx) return;
     const t = ctx.currentTime;
-    if (Math.abs(v.level - target) > 0.01) {
+    if (!this.ready && target > 0) return;
+    if ((v.level === 0) !== (target === 0) || Math.abs(v.level - target) > 0.01) {
       v.out.gain.cancelScheduledValues(t);
       v.out.gain.setTargetAtTime(target * LOOPS[name].gain, t, target > v.level ? LOOPS[name].fadeIn : LOOPS[name].fadeOut);
       v.level = target;
     }
-    v.pitch.forEach((p, i) => p.setTargetAtTime(v!.base[i] * pitch, t, 0.15));
+    if (target > 0) {
+      clearTimeout(v.idleTimer);
+      v.idleTimer = undefined;
+      if (Math.abs(v.pitchFactor - pitch) > 0.01 && t - v.pitchAt >= 0.08) {
+        for (let i = 0; i < v.pitch.length; i++) {
+          v.pitch[i].cancelScheduledValues(t);
+          v.pitch[i].setTargetAtTime(v.base[i] * pitch, t, 0.15);
+        }
+        v.pitchFactor = pitch;
+        v.pitchAt = t;
+      }
+    } else if (v.idleTimer === undefined) {
+      const idle = v;
+      idle.idleTimer = setTimeout(() => {
+        if (this.loops.get(name) === idle && idle.level === 0) this.stopLoop(name);
+      }, Math.ceil(LOOPS[name].fadeOut * 4000));
+    }
   }
 
   /** Fade out and release a continuous sound (all nodes disconnected). */
@@ -184,6 +246,7 @@ export class AudioEngine {
 
   private release(v: LoopVoice) {
     const ctx = this.ctx;
+    clearTimeout(v.idleTimer);
     try {
       const t = ctx?.currentTime ?? 0;
       v.out.gain.cancelScheduledValues(t);
@@ -220,12 +283,22 @@ export class AudioEngine {
 
   /** Tab hidden → suspend (no sound, no CPU); visible again → resume (allowed after the first gesture). */
   setHidden(hidden: boolean) {
+    this.hidden = hidden;
     const ctx = this.ctx;
     if (!ctx) return;
     try {
-      if (hidden && ctx.state === 'running') void ctx.suspend().catch(() => {});
-      if (!hidden && ctx.state === 'suspended') void ctx.resume().catch(() => {});
+      if (hidden && ctx.state === 'running') {
+        void ctx.suspend().then(() => {
+          if (!this.hidden && this.ctx === ctx) this.resume(ctx);
+        }, () => {});
+      }
+      if (!hidden) this.resume(ctx);
     } catch { /* ignore */ }
+  }
+
+  private resume(ctx: AudioContext) {
+    if (this.hidden || ctx.state === 'running' || ctx.state === 'closed') return;
+    try { void ctx.resume().catch(() => {}); } catch { /* blocked until the next gesture */ }
   }
 }
 
@@ -247,7 +320,7 @@ let installed = false;
 export function installAudio() {
   if (installed || typeof window === 'undefined') return;
   installed = true;
-  const unlock = () => audio.unlock();
+  const unlock = (e: Event) => { if (e.isTrusted) audio.unlock(); };
   for (const type of ['pointerdown', 'keydown', 'touchend'] as const) window.addEventListener(type, unlock, { capture: true, passive: true });
   document.addEventListener('click', (e) => {
     const el = (e.target as Element | null)?.closest?.('button, [role="radio"], [role="tab"], a.btn') as HTMLElement | null;

@@ -149,7 +149,7 @@ export const LOOPS = {
       const { ctx } = b;
       const out = ctx.createGain(); out.gain.value = 0;
       const o = osc(ctx, 'square', 150), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
-      const am = osc(ctx, 'square', 22), ag = ctx.createGain(); ag.gain.value = 0.3;
+      const am = osc(ctx, 'sine', 22), ag = ctx.createGain(); ag.gain.value = 0.3;
       const body = ctx.createGain(); body.gain.value = 0.7;
       am.connect(ag); ag.connect(body.gain);
       o.connect(lp); lp.connect(body);
@@ -167,12 +167,13 @@ export const LOOPS = {
       const { ctx } = b;
       const out = ctx.createGain(); out.gain.value = 0;
       const o1 = osc(ctx, 'sine', 60), o2 = osc(ctx, 'triangle', 120), g2 = ctx.createGain(); g2.gain.value = 0.25;
-      const { src, f } = noiseLoop(b, 'lowpass', 380); const gn = ctx.createGain(); gn.gain.value = 0.3; f.connect(gn); gn.connect(out);
-      const sway = osc(ctx, 'sine', 0.13), sg = ctx.createGain(); sg.gain.value = 0.15; sway.connect(sg); sg.connect(out.gain);
-      o1.connect(out); o2.connect(g2); g2.connect(out); out.connect(b.out);
+      const body = ctx.createGain(); body.gain.value = 0.85;
+      const { src, f } = noiseLoop(b, 'lowpass', 380); const gn = ctx.createGain(); gn.gain.value = 0.3; f.connect(gn); gn.connect(body);
+      const sway = osc(ctx, 'sine', 0.13), sg = ctx.createGain(); sg.gain.value = 0.15; sway.connect(sg); sg.connect(body.gain);
+      o1.connect(body); o2.connect(g2); g2.connect(body); body.connect(out); out.connect(b.out);
       const sources = [o1, o2, src, sway];
       sources.forEach((s) => s.start(b.t));
-      return { nodes: [out, o1, o2, g2, src, f, gn, sway, sg], sources, out, pitch: [], base: [] };
+      return { nodes: [out, body, o1, o2, g2, src, f, gn, sway, sg], sources, out, pitch: [], base: [] };
     },
   },
   /** Rover cabin electronics: faint steady tone (P1 ambience). */

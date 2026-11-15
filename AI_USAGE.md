@@ -18,6 +18,7 @@
 - Gameplay v2 design proposal and implementation (upgrades, emergencies, chapters), balance bots and the exact best-play search; the numbers were tuned by simulation and should be reviewed by the team after human play-testing.
 - Difficulty modes (Easy/Normal/Hard) on one engine with per-mode fictional values, chosen by balance simulation; save v2 with v1 migration; beginner coach tips and friendlier warnings; rover/puzzle hints per mode; the tabbed Science & Credits learning pages (texts checked against NASA Moon facts / LRO pages; no new measured values); a fix for a stuck-feeling power deficit; tests and QA scripts (Claude Code).
 - Game audio: Web Audio sound engine, synthesised effects and ambience, sound settings, tests (Claude Code).
+- Release QA and mobile audio repair: browser signal measurement, peak protection and scheduling fixes, responsive sound controls, and keyboard and emulated touch testing (OpenAI Codex). See [FINAL_RELEASE_QA.md](FINAL_RELEASE_QA.md).
 - Integration and deployment: merged PR #2 and #3 and enabled GitHub Pages on the team's instruction, then verified the live site with automated keyboard play-throughs and layout checks (Claude Code).
 - Rover route rebalance after the pixel redesign: route analysis (simulation + grid search), new fictional battery values, reference routes and the Mission 1 route guide/mini map (Claude Code).
 - Save & continue system (localStorage, validation, checkpoint) and rover visual/feedback polish (procedural Canvas art, effects, camera), with tests and QA scripts.
